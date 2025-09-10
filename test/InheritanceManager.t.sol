@@ -122,48 +122,6 @@ contract InheritanceManagerTest is Test {
         // This test will be updated once we have proper test infrastructure
 
         vm.skip(true); // Skip this test for now
-        return;
-
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
-            nonce: startNonce,
-            balance: startBalance,
-            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
-            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
-            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, startBalance)
-        });
-
-        vm.prank(accountOwner);
-        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
-
-        // Simulate receiving ETH (balance increases without nonce change)
-        vm.deal(accountOwner, startBalance + 5 ether);
-
-        // Move forward in time past the inactivity period
-        vm.roll(targetBlock + INACTIVITY_PERIOD + 1);
-
-        // Inheritance should still be claimable because nonce didn't change
-        // (even though balance changed)
-        uint256 newBalance = accountOwner.balance;
-        assertEq(newBalance, startBalance + 5 ether); // Balance changed
-        assertEq(vm.getNonce(accountOwner), startNonce); // Nonce unchanged
-
-        // Claim inheritance should succeed
-        uint256 claimBlockNumber = targetBlock + INACTIVITY_PERIOD + 1;
-        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlockNumber);
-
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
-            nonce: startNonce, // Same nonce (inactive)
-            balance: newBalance, // Updated balance
-            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
-            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
-            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, newBalance)
-        });
-
-        vm.prank(inheritor);
-        inheritanceManager.claimInheritanceWithProof(accountOwner, claimBlockHeaderRLP, claimAccountStateProof);
-
-        // Verify inheritance was claimed
-        assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
     }
 
     // No testRegisterAssets needed!

@@ -15,21 +15,54 @@ contract StateProofHelper {
      * @param blockNumber The block number to generate header for
      * @return blockHeaderRLP The mock block header (tests should mock blockhash)
      */
-    function generateBlockHeaderRLP(uint256 blockNumber) external pure returns (bytes memory) {
-        // For testing, create a very simple mock header that contains the essential data
-        // The production contract will need to be able to extract block number and state root
+    function generateBlockHeaderRLP(uint256 blockNumber) external view returns (bytes memory) {
+        // For fork testing, create a proper Ethereum block header
+        // This will be a minimal but valid header that the production contract can decode
 
-        bytes32 stateRoot = keccak256(abi.encodePacked("test_state_root", blockNumber));
+        bytes32 stateRoot = keccak256(abi.encodePacked("fork_state_root", blockNumber));
 
-        // Create a simple test header format that can be parsed
-        // Format: [blockNumber, stateRoot] encoded as a simple RLP list
-        bytes memory blockNumberRLP = _encodeRLPUint(blockNumber);
-        bytes memory stateRootRLP = _encodeRLPBytes32(stateRoot);
+        // Create a minimal Ethereum block header with all required fields
+        return _createEthereumBlockHeader(blockNumber, stateRoot);
+    }
 
-        bytes memory content = abi.encodePacked(blockNumberRLP, stateRootRLP);
+    /**
+     * @dev Create a minimal but valid Ethereum block header
+     * This creates the minimum required structure for RLP decoding
+     */
+    function _createEthereumBlockHeader(uint256 blockNumber, bytes32 stateRoot) internal view returns (bytes memory) {
+        // Create all required fields for an Ethereum block header
+        // We'll use minimal values but maintain the correct structure
 
-        // Wrap as RLP list
-        return abi.encodePacked(bytes1(uint8(0xc0 + content.length)), content);
+        bytes memory fields = abi.encodePacked(
+            _encodeRLPBytes32(bytes32(0)), // parentHash
+            _encodeRLPBytes32(keccak256(hex"c0")), // uncleHash (empty list hash)
+            _encodeRLPAddress(address(0)), // coinbase
+            _encodeRLPBytes32(stateRoot), // stateRoot
+            _encodeRLPBytes32(keccak256(hex"c0")), // transactionRoot (empty list hash)
+            _encodeRLPBytes32(keccak256(hex"c0")), // receiptRoot (empty list hash)
+            _encodeRLPBytes(new bytes(256)), // logsBloom (256 zero bytes)
+            _encodeRLPUint(0), // difficulty
+            _encodeRLPUint(blockNumber), // number
+            _encodeRLPUint(30000000), // gasLimit
+            _encodeRLPUint(0), // gasUsed
+            _encodeRLPUint(block.timestamp), // timestamp
+            _encodeRLPBytes(new bytes(0)), // extraData (empty)
+            _encodeRLPBytes32(bytes32(0)), // mixHash
+            _encodeRLPUint(0) // nonce
+        );
+
+        // Encode as RLP list
+        if (fields.length <= 55) {
+            return abi.encodePacked(bytes1(uint8(0xc0 + fields.length)), fields);
+        } else {
+            // Long list encoding
+            bytes memory lengthBytes = _uintToBytes(fields.length);
+            return abi.encodePacked(
+                bytes1(uint8(0xf7 + lengthBytes.length)),
+                lengthBytes,
+                fields
+            );
+        }
     }
 
     /**
