@@ -14,28 +14,47 @@ EtherSafe enables EOA owners to set up inheritance that automatically transfers 
 
 ### How It Works
 
+```mermaid
+graph TD
+    A[👤 EOA Owner] --> B[⚙️ Configure Inheritance]
+    B --> C[📝 Specify Inheritor & Period]
+    C --> D[🔗 Set EIP-7702 Delegation]
+    D --> E[✅ Setup Complete]
+
+    E --> F[📱 Normal EOA Operations]
+    F --> G{🔍 Account Active?}
+    G -->|Yes| F
+    G -->|No| H[⏰ Mark Inactivity Start]
+
+    H --> I[🔐 Cryptographic State Verification]
+    I --> J[⏳ Inactivity Period Countdown]
+    J --> K{⏱️ Period Expired?}
+    K -->|No| L[⏳ Wait...]
+    L --> K
+    K -->|Yes| M[👥 Inheritor Claims]
+
+    M --> N[🔍 Verify Account Still Inactive]
+    N --> O{✅ Nonce Unchanged?}
+    O -->|No| P[❌ Claim Rejected]
+    O -->|Yes| Q[🎉 Inheritance Granted]
+
+    Q --> R[🎮 Inheritor Controls EOA]
+    R --> S[💰 Access All Assets]
+    S --> T[🏦 ETH, Tokens, NFTs, DeFi]
+
+    style A fill:#e1f5fe
+    style Q fill:#c8e6c9
+    style R fill:#c8e6c9
+    style S fill:#c8e6c9
+    style T fill:#c8e6c9
+    style P fill:#ffcdd2
 ```
-1. Setup Phase
-   ├── EOA owner configures inheritance
-   ├── Specifies inheritor and inactivity period
-   ├── EOA delegates to EIP7702InheritanceController (recommended)
-   └── EOA continues normal operations
 
-2. Inactivity Detection
-   ├── Anyone can mark inactivity start
-   ├── System verifies account state hasn't changed
-   └── Inactivity period countdown begins
-
-3. Inheritance Claim
-   ├── Inheritor claims inheritance after period expires
-   ├── System verifies account remained inactive
-   └── Inheritance is granted
-
-4. EOA Control Transfer
-   ├── Inheritor gains direct control of EOA (delegation already set up)
-   ├── Controller enforces inheritance verification
-   └── All assets remain in original EOA
-```
+**Key Security Features:**
+- 🔒 **Nonce-Only Detection**: Only actual transactions (not balance changes) indicate activity
+- 🛡️ **Griefing Resistant**: Attackers can't block inheritance by sending ETH
+- 🔐 **Cryptographic Proofs**: State verification uses Merkle proofs
+- ⛓️ **On-Chain**: No reliance on oracles or centralized services
 
 ## ✨ Key Features
 
