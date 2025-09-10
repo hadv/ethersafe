@@ -29,7 +29,6 @@ contract InheritanceManager {
     struct InactivityRecord {
         uint256 startBlock;         // When inactivity period started
         uint256 startNonce;         // Account nonce at start
-        uint256 startBalance;       // Account balance at start
         bool isMarked;              // Whether inactivity has been marked
     }
 
@@ -333,10 +332,9 @@ contract InheritanceManager {
         inactivityRecords[account] = InactivityRecord({
             startBlock: blockNumber,
             startNonce: accountStateProof.nonce,
-            startBalance: accountStateProof.balance,
             isMarked: true
         });
-        
+
         emit InactivityMarked(account, blockNumber, accountStateProof.nonce, accountStateProof.balance);
     }
     
@@ -391,9 +389,10 @@ contract InheritanceManager {
             revert InvalidStateProof();
         }
 
-        // Verify account is still inactive (same nonce and balance)
-        if (currentAccountStateProof.nonce != record.startNonce ||
-            currentAccountStateProof.balance != record.startBalance) {
+        // Verify account is still inactive (same nonce only)
+        // Note: We only check nonce because balance can change without account owner activity
+        // (e.g., receiving ETH transfers, mining rewards, airdrops, etc.)
+        if (currentAccountStateProof.nonce != record.startNonce) {
             revert AccountStillActive();
         }
         
@@ -465,10 +464,9 @@ contract InheritanceManager {
     function getInactivityRecord(address account) external view returns (
         uint256 startBlock,
         uint256 startNonce,
-        uint256 startBalance,
         bool isMarked
     ) {
         InactivityRecord memory record = inactivityRecords[account];
-        return (record.startBlock, record.startNonce, record.startBalance, record.isMarked);
+        return (record.startBlock, record.startNonce, record.isMarked);
     }
 }

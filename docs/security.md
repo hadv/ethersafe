@@ -15,8 +15,8 @@ Important security considerations and best practices for the EtherSafe inheritan
 - **Strict delegation control**: Only verified inheritors can control inherited EOAs
 
 ### 3. State Integrity
-- **On-chain verification**: Account activity is verified using nonce and balance changes
-- **State root validation**: Future versions will use Merkle proofs for enhanced security
+- **On-chain verification**: Account activity is verified using nonce changes only
+- **Merkle proof validation**: Uses cryptographic proofs for state verification
 - **Block hash verification**: Prevents manipulation of historical state
 
 ## Potential Attack Vectors
@@ -29,18 +29,30 @@ Important security considerations and best practices for the EtherSafe inheritan
 ```solidity
 // System verifies account remained inactive throughout the period
 function claimInheritance(address account, ...) external {
-    ActivityRecord memory record = activityRecords[account];
-    
-    // Verify account state hasn't changed since inactivity was marked
+    InactivityRecord memory record = inactivityRecords[account];
+
+    // Verify account nonce hasn't changed since inactivity was marked
+    // Note: Only nonce is checked, not balance, because balance can change
+    // without account owner activity (receiving transfers, rewards, etc.)
     require(
-        account.nonce == record.startNonce && 
-        account.balance == record.startBalance,
+        currentAccountStateProof.nonce == record.startNonce,
         "Account still active"
     );
 }
 ```
 
-### 2. False Inactivity Marking
+### 2. Balance-Based Attack Prevention
+
+**Risk**: Attacker sends ETH to inactive accounts to prevent inheritance.
+
+**Mitigation**: The system **only** checks nonce changes, not balance changes:
+- Balance can increase without account owner activity (transfers, rewards, airdrops)
+- Only nonce changes indicate the account owner sent a transaction
+- Prevents attackers from blocking inheritance by sending funds to inactive accounts
+
+**Security Benefit**: This design makes the inheritance system resistant to griefing attacks where malicious actors try to prevent legitimate inheritance by sending small amounts of ETH to inactive accounts.
+
+### 3. False Inactivity Marking
 
 **Risk**: Malicious actor marks an active account as inactive.
 

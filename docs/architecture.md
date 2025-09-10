@@ -113,15 +113,19 @@ In both cases:
 
 ### Activity Detection
 The system detects account activity by monitoring:
-- **Nonce changes**: Any transaction increases the account nonce
-- **Balance changes**: ETH transfers affect the account balance
+- **Nonce changes**: Any transaction sent by the account owner increases the account nonce
+
+**Important**: The system **only** checks nonce changes, not balance changes. This is because:
+- Balance can increase without account owner activity (receiving transfers, mining rewards, airdrops)
+- Only nonce changes indicate that the account owner has sent a transaction
+- This prevents false positives where inactive accounts receive funds
 
 ```solidity
 function isAccountActive(address account, ActivityRecord memory record) internal view returns (bool) {
     uint256 currentNonce = account.nonce;
-    uint256 currentBalance = account.balance;
-    
-    return currentNonce != record.startNonce || currentBalance != record.startBalance;
+
+    // Only check nonce - balance can change without owner activity
+    return currentNonce != record.startNonce;
 }
 ```
 

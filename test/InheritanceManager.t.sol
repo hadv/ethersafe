@@ -105,6 +105,41 @@ contract InheritanceManagerTest is Test {
         assertFalse(isActive);
     }
 
+    function testBalanceChangesDoNotAffectInactivity() public {
+        // Configure inheritance
+        vm.prank(accountOwner);
+        inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
+
+        // Mark inactivity start
+        uint256 startNonce = vm.getNonce(accountOwner);
+        uint256 startBalance = accountOwner.balance;
+
+        vm.roll(TEST_BLOCK);
+        bytes memory stateProof = abi.encode("mock_proof");
+
+        vm.prank(accountOwner);
+        inheritanceManager.markInactivityStart(accountOwner, TEST_BLOCK, startNonce, startBalance, stateProof);
+
+        // Simulate receiving ETH (balance increases without nonce change)
+        vm.deal(accountOwner, startBalance + 5 ether);
+
+        // Move forward in time past the inactivity period
+        vm.roll(TEST_BLOCK + INACTIVITY_PERIOD + 1);
+
+        // Inheritance should still be claimable because nonce didn't change
+        // (even though balance changed)
+        uint256 newBalance = accountOwner.balance;
+        assertEq(newBalance, startBalance + 5 ether); // Balance changed
+        assertEq(vm.getNonce(accountOwner), startNonce); // Nonce unchanged
+
+        // Claim inheritance should succeed
+        vm.prank(inheritor);
+        inheritanceManager.claimInheritance(accountOwner, TEST_BLOCK + INACTIVITY_PERIOD + 1, startNonce, newBalance, stateProof);
+
+        // Verify inheritance was claimed
+        assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
+    }
+
     // No testRegisterAssets needed!
     // With EIP-7702 delegation, inheritor automatically gets access to ALL assets
 
