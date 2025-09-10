@@ -237,7 +237,7 @@ contract StateProofVerificationTest is Test {
         
         vm.roll(TEST_BLOCK + 100);
         uint256 inactivityBlock = TEST_BLOCK + 100;
-        bytes32 inactivityBlockHash = keccak256(abi.encodePacked("mock_block_hash", inactivityBlock));
+        bytes32 inactivityBlockHash = blockhash(inactivityBlock);
         
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
@@ -249,7 +249,7 @@ contract StateProofVerificationTest is Test {
         // Wait for inactivity period
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes32 claimBlockHash = keccak256(abi.encodePacked("mock_block_hash", claimBlock));
+        bytes32 claimBlockHash = blockhash(claimBlock);
         
         // Create state proof showing account became active (different nonce)
         InheritanceManager.AccountStateProof memory activeStateProof = InheritanceManager.AccountStateProof({
@@ -293,7 +293,7 @@ contract StateProofVerificationTest is Test {
         
         vm.roll(TEST_BLOCK + 100);
         uint256 inactivityBlock = TEST_BLOCK + 100;
-        bytes32 inactivityBlockHash = keccak256(abi.encodePacked("mock_block_hash", inactivityBlock));
+        bytes32 inactivityBlockHash = blockhash(inactivityBlock);
         
         // Should revert with InvalidStateProof
         vm.expectRevert(abi.encodeWithSelector(

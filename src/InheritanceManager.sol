@@ -166,11 +166,10 @@ contract InheritanceManager {
         // Get the actual block hash
         bytes32 actualBlockHash = blockhash(blockNumber);
 
+        // For blocks older than 256 blocks, blockhash returns 0
         if (actualBlockHash == bytes32(0)) {
-            // For blocks older than 256 blocks or in test environments,
-            // check against deterministic test hash
-            bytes32 testBlockHash = keccak256(abi.encodePacked("test_block_hash", blockNumber, block.chainid));
-            return providedBlockHash == testBlockHash;
+            // Block too old - cannot verify
+            return false;
         }
 
         // Verify the provided block hash matches the actual block hash
@@ -201,12 +200,9 @@ contract InheritanceManager {
             proof: simpleProof
         });
 
-        // Get the actual block hash, or use a deterministic hash for testing
+        // Get the actual block hash
         bytes32 blockHash = blockhash(blockNumber);
-        if (blockHash == bytes32(0)) {
-            // For testing or old blocks, create a deterministic hash
-            blockHash = keccak256(abi.encodePacked("test_block_hash", blockNumber, block.chainid));
-        }
+        require(blockHash != bytes32(0), "Block hash not available");
 
         // Call the new implementation
         _markInactivityStartWithProof(account, blockNumber, blockHash, accountStateProof);
@@ -235,12 +231,9 @@ contract InheritanceManager {
             proof: simpleProof
         });
 
-        // Get the actual block hash, or use a deterministic hash for testing
+        // Get the actual block hash
         bytes32 currentBlockHash = blockhash(currentBlock);
-        if (currentBlockHash == bytes32(0)) {
-            // For testing or old blocks, create a deterministic hash
-            currentBlockHash = keccak256(abi.encodePacked("test_block_hash", currentBlock, block.chainid));
-        }
+        require(currentBlockHash != bytes32(0), "Block hash not available");
 
         // Call the new implementation
         _claimInheritanceWithProof(account, currentBlock, currentBlockHash, currentAccountStateProof);
