@@ -575,11 +575,11 @@ contract InheritanceManager {
             revert InvalidBlockHash();
         }
 
-        // Get the current state root from the block
-        bytes32 currentStateRoot = currentBlockHash; // Simplified - in reality, extract from block header
+        // The state root has already been verified through block header verification
+        // in extractStateRootFromHeader(), so we can trust it here
 
-        // Verify the current account state proof
-        if (!verifyAccountState(account, currentStateRoot, currentAccountStateProof)) {
+        // Verify the current account state proof against the verified state root
+        if (!verifyAccountState(account, stateRoot, currentAccountStateProof)) {
             revert InvalidStateProof();
         }
 
