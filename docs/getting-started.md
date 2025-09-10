@@ -56,6 +56,16 @@ inheritanceManager.configureInheritance(
 );
 ```
 
+### 3. Set Up EIP-7702 Delegation (Recommended)
+
+```javascript
+// Set up delegation during setup phase (recommended approach)
+await setEIP7702Delegation(eoaAddress, controllerAddress);
+
+// Now the EOA is delegated to the controller, but only the inheritor
+// can use it after inheritance is claimed
+```
+
 ## Basic Usage
 
 ### Step 1: Normal Operations
@@ -97,13 +107,10 @@ inheritanceManager.claimInheritance(
 
 ### Step 4: Control the Inherited EOA
 
-Once inheritance is claimed, set up EIP-7702 delegation and control the EOA:
+Once inheritance is claimed, the inheritor can immediately control the EOA (delegation already set up):
 
 ```javascript
-// Set up EIP-7702 delegation (requires EOA's private key or pre-signed auth)
-await setEIP7702Delegation(eoaAddress, controllerAddress);
-
-// Now inheritor can control the EOA directly
+// Inheritor can now control the EOA directly (delegation was set up in step 3)
 const controller = new ethers.Contract(controllerAddress, abi, inheritorSigner);
 
 // Transfer ETH from the inherited EOA
@@ -115,6 +122,16 @@ const transferCall = token.interface.encodeFunctionData("transfer", [
     ethers.parseEther("100")
 ]);
 await controller.execute(tokenAddress, 0, transferCall);
+```
+
+**Alternative: Post-Inheritance Delegation**
+
+If delegation wasn't set up during the setup phase:
+
+```javascript
+// Set up EIP-7702 delegation after inheritance is claimed
+// (requires EOA's private key or pre-signed authorization)
+await setEIP7702Delegation(eoaAddress, controllerAddress);
 ```
 
 ## Example: Complete Flow

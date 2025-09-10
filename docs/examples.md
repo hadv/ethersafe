@@ -264,6 +264,11 @@ inheritanceManager.configureInheritance(
 );
 ```
 
+```javascript
+// Set up EIP-7702 delegation during setup (recommended)
+await setEIP7702Delegation(eoaAddress, controllerAddress);
+```
+
 ### 3. Monitoring and Claiming
 ```solidity
 // Monitor for inactive accounts
@@ -279,11 +284,11 @@ if (canClaimInheritance(eoaAddress)) {
 
 ### 4. EOA Control Transfer
 ```javascript
-// Set up EIP-7702 delegation after inheritance is claimed
-await setEIP7702Delegation(inheritedEOA, controllerAddress);
-
-// Inheritor now controls the EOA
+// Inheritor can immediately control the EOA (delegation already set up in step 2)
 const controller = new ethers.Contract(controllerAddress, abi, inheritorSigner);
+
+// Alternative: Set up delegation after inheritance is claimed (if not done in setup)
+// await setEIP7702Delegation(inheritedEOA, controllerAddress);
 ```
 
 ## Security Best Practices

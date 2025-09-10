@@ -16,6 +16,7 @@ EtherSafe enables EOA owners to set up inheritance that automatically transfers 
 1. Setup Phase
    ├── EOA owner configures inheritance
    ├── Specifies inheritor and inactivity period
+   ├── EOA delegates to EIP7702InheritanceController (recommended)
    └── EOA continues normal operations
 
 2. Inactivity Detection
@@ -29,8 +30,8 @@ EtherSafe enables EOA owners to set up inheritance that automatically transfers 
    └── Inheritance is granted
 
 4. EOA Control Transfer
-   ├── EOA delegates to EIP7702InheritanceController
-   ├── Inheritor gains direct control of EOA
+   ├── Inheritor gains direct control of EOA (delegation already set up)
+   ├── Controller enforces inheritance verification
    └── All assets remain in original EOA
 ```
 

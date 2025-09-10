@@ -92,9 +92,22 @@ function execute(address to, uint256 value, bytes calldata data) external {
 3. Inheritance is granted to the inheritor
 
 ### Phase 4: EOA Control
-1. EOA sets up EIP-7702 delegation to `EIP7702InheritanceController`
-2. Inheritor can now execute transactions directly from the inherited EOA
-3. All assets remain in the original EOA address
+
+**Option A: Pre-Setup Delegation (Recommended)**
+1. EOA owner sets up EIP-7702 delegation during initial setup
+2. EOA delegates to `EIP7702InheritanceController` immediately
+3. Controller only allows inheritor access after inheritance is claimed
+4. More secure and practical approach
+
+**Option B: Post-Inheritance Delegation**
+1. EOA sets up EIP-7702 delegation after inheritance is claimed
+2. Requires access to EOA's private key or pre-signed authorization
+3. Less practical but possible for specific scenarios
+
+In both cases:
+- Inheritor can execute transactions directly from the inherited EOA
+- All assets remain in the original EOA address
+- Controller enforces inheritance verification
 
 ## State Verification
 
