@@ -2,6 +2,8 @@
 
 A trustless inheritance system for Ethereum EOAs (Externally Owned Accounts) using EIP-7702 delegation.
 
+> **📋 Background**: This project implements the proposal [EOA Inheritance/Recovery over Inactivity with EIP-7702](https://ethereum-magicians.org/t/eoa-inheritance-recovery-over-inactivity-with-eip-7702/25382) from the Ethereum Magicians Forum.
+
 ## Overview
 
 EtherSafe enables EOA owners to set up inheritance that automatically transfers control to designated inheritors after a period of account inactivity. The system uses on-chain state verification and EIP-7702 delegation to provide a trustless, decentralized inheritance mechanism.
