@@ -377,78 +377,10 @@ contract InheritanceManager {
         return actualBlockHash == providedBlockHash;
     }
 
-    /**
-     * @notice Legacy function for backward compatibility with existing tests
-     * @dev This function maintains the old interface while using new state proof verification
-     */
-    function markInactivityStart(
-        address account,
-        uint256 blockNumber,
-        uint256 nonce,
-        uint256 balance,
-        bytes calldata stateProof
-    ) external {
-        // For legacy compatibility, create a simple state proof
-        // This function is deprecated and should not be used in production
-        bytes32[] memory simpleProof = new bytes32[](1);
-        simpleProof[0] = keccak256(stateProof);
 
-        AccountStateProof memory accountStateProof = AccountStateProof({
-            nonce: nonce,
-            balance: balance,
-            storageHash: keccak256(abi.encodePacked("storage", account, nonce)),
-            codeHash: keccak256(abi.encodePacked("code", account)),
-            proof: simpleProof
-        });
 
-        // Get the actual block hash
-        bytes32 blockHash = blockhash(blockNumber);
-        require(blockHash != bytes32(0), "Block hash not available");
 
-        // For legacy compatibility, create a simple state root
-        // This is not secure and should not be used in production
-        bytes32 legacyStateRoot = keccak256(abi.encodePacked("legacy_state_root", blockNumber, blockHash));
-
-        // Call the new implementation
-        _markInactivityStartWithProof(account, blockNumber, blockHash, legacyStateRoot, accountStateProof);
-    }
-
-    /**
-     * @notice Legacy function for backward compatibility with existing tests
-     */
-    function claimInheritance(
-        address account,
-        uint256 currentBlock,
-        uint256 currentNonce,
-        uint256 currentBalance,
-        bytes calldata stateProof
-    ) external {
-        // For legacy compatibility, create a simple state proof
-        // This function is deprecated and should not be used in production
-        bytes32[] memory simpleProof = new bytes32[](1);
-        simpleProof[0] = keccak256(stateProof);
-
-        AccountStateProof memory currentAccountStateProof = AccountStateProof({
-            nonce: currentNonce,
-            balance: currentBalance,
-            storageHash: keccak256(abi.encodePacked("storage", account, currentNonce)),
-            codeHash: keccak256(abi.encodePacked("code", account)),
-            proof: simpleProof
-        });
-
-        // Get the actual block hash
-        bytes32 currentBlockHash = blockhash(currentBlock);
-        require(currentBlockHash != bytes32(0), "Block hash not available");
-
-        // For legacy compatibility, create a simple state root
-        // This is not secure and should not be used in production
-        bytes32 legacyStateRoot = keccak256(abi.encodePacked("legacy_state_root", currentBlock, currentBlockHash));
-
-        // Call the new implementation
-        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, legacyStateRoot, currentAccountStateProof);
-    }
-
-    // --- Public State Proof Functions (for testing and advanced usage) ---
+    // --- Production State Proof Functions ---
 
     /**
      * @notice Mark inactivity with full state proof verification (public version)
