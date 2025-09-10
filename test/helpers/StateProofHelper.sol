@@ -11,6 +11,124 @@ contract StateProofHelper {
     using MerkleProof for bytes32[];
 
     /**
+     * @dev Generate mock block header for testing
+     * @param blockNumber The block number to generate header for
+     * @return blockHeaderRLP The mock block header (tests should mock blockhash)
+     */
+    function generateBlockHeaderRLP(uint256 blockNumber) external pure returns (bytes memory) {
+        // Create a deterministic state root for this block
+        bytes32 stateRoot = keccak256(abi.encodePacked("test_state_root", blockNumber));
+
+        // Create a simple mock block header structure
+        // Tests should use vm.mockCall to make blockhash(blockNumber) return keccak256(this header)
+        return abi.encodePacked(
+            "TEST_HEADER_",  // Prefix to identify as test data
+            blockNumber,     // Block number (for extraction)
+            stateRoot       // State root (for extraction)
+        );
+    }
+
+    /**
+     * @dev Get the hash of a mock block header (for mocking blockhash)
+     * @param blockNumber The block number
+     * @return The hash that blockhash(blockNumber) should return in tests
+     */
+    function getMockBlockHash(uint256 blockNumber) external view returns (bytes32) {
+        bytes memory header = this.generateBlockHeaderRLP(blockNumber);
+        return keccak256(header);
+    }
+
+    /**
+     * @dev Generate a simple account proof for testing
+     * @param account The account address
+     * @param nonce The account nonce
+     * @param balance The account balance
+     * @return proof A simple mock Merkle proof
+     */
+    function generateAccountProof(
+        address account,
+        uint256 nonce,
+        uint256 balance
+    ) external pure returns (bytes32[] memory proof) {
+        // Create a simple mock proof for testing
+        proof = new bytes32[](2);
+        proof[0] = keccak256(abi.encodePacked("proof1", account, nonce));
+        proof[1] = keccak256(abi.encodePacked("proof2", account, balance));
+        return proof;
+    }
+
+    /**
+     * @dev Encode uint256 as RLP
+     */
+    function _encodeUint256(uint256 value) internal pure returns (bytes memory) {
+        if (value == 0) {
+            return abi.encodePacked(bytes1(0x80));
+        }
+
+        // Convert to minimal byte representation
+        bytes memory result = new bytes(32);
+        uint256 length = 0;
+        uint256 temp = value;
+
+        while (temp > 0) {
+            result[31 - length] = bytes1(uint8(temp & 0xff));
+            temp >>= 8;
+            length++;
+        }
+
+        // Create final result with RLP prefix
+        bytes memory encoded = new bytes(length + 1);
+        encoded[0] = bytes1(uint8(0x80 + length));
+        for (uint256 i = 0; i < length; i++) {
+            encoded[i + 1] = result[32 - length + i];
+        }
+
+        return encoded;
+    }
+
+    /**
+     * @dev Encode a block header into RLP format
+     * This is a simplified implementation for testing
+     */
+    function _encodeBlockHeader(
+        bytes32 parentHash,
+        bytes32 uncleHash,
+        address coinbase,
+        bytes32 stateRoot,
+        bytes32 transactionRoot,
+        bytes32 receiptRoot,
+        bytes memory logsBloom,
+        uint256 difficulty,
+        uint256 number,
+        uint256 gasLimit,
+        uint256 gasUsed,
+        uint256 timestamp,
+        bytes memory extraData,
+        bytes32 mixHash,
+        uint64 nonce
+    ) internal pure returns (bytes memory) {
+        // For testing purposes, create a simple concatenation
+        // In a real implementation, this would be proper RLP encoding
+        return abi.encodePacked(
+            parentHash,
+            uncleHash,
+            coinbase,
+            stateRoot,
+            transactionRoot,
+            receiptRoot,
+            logsBloom,
+            difficulty,
+            number,
+            gasLimit,
+            gasUsed,
+            timestamp,
+            extraData,
+            mixHash,
+            nonce
+        );
+    }
+
+    /**
      * @dev Generate a real state root and proof for testing
      * @param accounts Array of account addresses
      * @param accountStates Array of account states corresponding to addresses

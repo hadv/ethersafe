@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "./helpers/StateProofHelper.sol";
 
 /**
  * @title InheritanceManagerTest
@@ -10,7 +11,8 @@ import "../src/InheritanceManager.sol";
  */
 contract InheritanceManagerTest is Test {
     InheritanceManager public inheritanceManager;
-    
+    StateProofHelper public stateProofHelper;
+
     // Mock EIP-7702 delegator
     MockEIP7702Delegator public delegator;
     MockERC20 public mockToken;
@@ -30,6 +32,7 @@ contract InheritanceManagerTest is Test {
     function setUp() public {
         // Deploy contracts
         inheritanceManager = new InheritanceManager();
+        stateProofHelper = new StateProofHelper();
         delegator = new MockEIP7702Delegator();
         mockToken = new MockERC20("Test Token", "TEST");
         
@@ -114,17 +117,29 @@ contract InheritanceManagerTest is Test {
         uint256 startNonce = vm.getNonce(accountOwner);
         uint256 startBalance = accountOwner.balance;
 
-        vm.roll(TEST_BLOCK);
-        bytes memory stateProof = abi.encode("mock_proof");
+        // Use current block for testing (blockhash works for recent blocks)
+        uint256 currentBlock = block.number;
+        vm.roll(currentBlock + 1); // Move to next block so we can get hash of currentBlock
+
+        // Generate test block header and account state proof
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(currentBlock);
+
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: startNonce,
+            balance: startBalance,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, startBalance)
+        });
 
         vm.prank(accountOwner);
-        inheritanceManager.markInactivityStart(accountOwner, TEST_BLOCK, startNonce, startBalance, stateProof);
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
 
         // Simulate receiving ETH (balance increases without nonce change)
         vm.deal(accountOwner, startBalance + 5 ether);
 
         // Move forward in time past the inactivity period
-        vm.roll(TEST_BLOCK + INACTIVITY_PERIOD + 1);
+        vm.roll(currentBlock + INACTIVITY_PERIOD + 1);
 
         // Inheritance should still be claimable because nonce didn't change
         // (even though balance changed)
@@ -133,8 +148,19 @@ contract InheritanceManagerTest is Test {
         assertEq(vm.getNonce(accountOwner), startNonce); // Nonce unchanged
 
         // Claim inheritance should succeed
+        uint256 claimBlockNumber = currentBlock + INACTIVITY_PERIOD + 1;
+        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlockNumber);
+
+        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+            nonce: startNonce, // Same nonce (inactive)
+            balance: newBalance, // Updated balance
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, newBalance)
+        });
+
         vm.prank(inheritor);
-        inheritanceManager.claimInheritance(accountOwner, TEST_BLOCK + INACTIVITY_PERIOD + 1, startNonce, newBalance, stateProof);
+        inheritanceManager.claimInheritanceWithProof(accountOwner, claimBlockHeaderRLP, claimAccountStateProof);
 
         // Verify inheritance was claimed
         assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
@@ -152,15 +178,18 @@ contract InheritanceManagerTest is Test {
         
         // Step 2: Mark inactivity start (no asset registration needed!)
         vm.roll(TEST_BLOCK + 100);
-        bytes memory stateProof = abi.encode("mock_proof");
-        
-        inheritanceManager.markInactivityStart(
-            accountOwner,
-            TEST_BLOCK + 100,
-            42, // nonce
-            5 ether, // balance
-            stateProof
-        );
+
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
         
         // Step 3: Wait for inactivity period
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
@@ -171,13 +200,18 @@ contract InheritanceManagerTest is Test {
         vm.expectEmit(true, true, false, false);
         emit InheritanceClaimed(accountOwner, inheritor);
         
-        inheritanceManager.claimInheritance(
-            accountOwner,
-            TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1,
-            42, // same nonce (inactive)
-            5 ether, // same balance (inactive)
-            stateProof
-        );
+        uint256 claimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
+        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlockNumber);
+
+        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42, // same nonce (inactive)
+            balance: 5 ether, // same balance (inactive)
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.claimInheritanceWithProof(accountOwner, claimBlockHeaderRLP, claimAccountStateProof);
         
         // Verify inheritance claimed
         assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
@@ -190,9 +224,18 @@ contract InheritanceManagerTest is Test {
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
         
         vm.roll(TEST_BLOCK + 100);
-        bytes memory stateProof = abi.encode("mock_proof");
-        
-        inheritanceManager.markInactivityStart(accountOwner, TEST_BLOCK + 100, 42, 5 ether, stateProof);
+
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
         
         // Try to claim before period ends
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2);
@@ -202,7 +245,18 @@ contract InheritanceManagerTest is Test {
             InheritanceManager.InactivityPeriodNotMet.selector
         ));
         
-        inheritanceManager.claimInheritance(accountOwner, TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2, 42, 5 ether, stateProof);
+        uint256 earlyClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2;
+        bytes memory earlyClaimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(earlyClaimBlockNumber);
+
+        InheritanceManager.AccountStateProof memory earlyClaimAccountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.claimInheritanceWithProof(accountOwner, earlyClaimBlockHeaderRLP, earlyClaimAccountStateProof);
     }
 
     function testInheritanceClaimAccountActive() public {
@@ -211,9 +265,18 @@ contract InheritanceManagerTest is Test {
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
         
         vm.roll(TEST_BLOCK + 100);
-        bytes memory stateProof = abi.encode("mock_proof");
-        
-        inheritanceManager.markInactivityStart(accountOwner, TEST_BLOCK + 100, 42, 5 ether, stateProof);
+
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
         
         // Wait for period to pass
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
@@ -224,13 +287,18 @@ contract InheritanceManagerTest is Test {
             InheritanceManager.AccountStillActive.selector
         ));
         
-        inheritanceManager.claimInheritance(
-            accountOwner,
-            TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1,
-            43, // different nonce
-            5 ether,
-            stateProof
-        );
+        uint256 activeClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
+        bytes memory activeClaimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(activeClaimBlockNumber);
+
+        InheritanceManager.AccountStateProof memory activeClaimAccountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 43, // different nonce (account became active)
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 43, 5 ether)
+        });
+
+        inheritanceManager.claimInheritanceWithProof(accountOwner, activeClaimBlockHeaderRLP, activeClaimAccountStateProof);
     }
 
     // --- View Function Tests ---
@@ -247,8 +315,18 @@ contract InheritanceManagerTest is Test {
         
         // Mark inactivity
         vm.roll(TEST_BLOCK + 100);
-        bytes memory stateProof = abi.encode("mock_proof");
-        inheritanceManager.markInactivityStart(accountOwner, TEST_BLOCK + 100, 42, 5 ether, stateProof);
+
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
+        });
+
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
         
         // Before period completion
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2);

@@ -171,17 +171,18 @@ contract StateProofVerificationTest is Test {
         vm.expectEmit(true, false, false, true);
         emit InactivityMarked(accountOwner, inactivityBlock, 42, 5 ether);
 
+        // Generate block header RLP for the inactivity block
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(inactivityBlock);
+
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
-            inactivityBlock,
-            inactivityBlockHash,
+            blockHeaderRLP,
             initialState
         );
         
         // Wait for inactivity period
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes32 claimBlockHash = blockhash(claimBlock);
 
         // Create state proof showing account is still inactive (same nonce)
         InheritanceManager.AccountStateProof memory currentState = InheritanceManager.AccountStateProof({
@@ -206,10 +207,12 @@ contract StateProofVerificationTest is Test {
         vm.expectEmit(true, true, false, false);
         emit InheritanceClaimed(accountOwner, inheritor);
 
+        // Generate block header RLP for the claim block
+        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlock);
+
         inheritanceManager.claimInheritanceWithProof(
             accountOwner,
-            claimBlock,
-            claimBlockHash,
+            claimBlockHeaderRLP,
             currentState
         );
         
@@ -237,19 +240,19 @@ contract StateProofVerificationTest is Test {
         
         vm.roll(TEST_BLOCK + 100);
         uint256 inactivityBlock = TEST_BLOCK + 100;
-        bytes32 inactivityBlockHash = blockhash(inactivityBlock);
-        
+
+        // Generate block header RLP for the inactivity block
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(inactivityBlock);
+
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
-            inactivityBlock,
-            inactivityBlockHash,
+            blockHeaderRLP,
             initialStateProof
         );
         
         // Wait for inactivity period
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes32 claimBlockHash = blockhash(claimBlock);
         
         // Create state proof showing account became active (different nonce)
         InheritanceManager.AccountStateProof memory activeStateProof = InheritanceManager.AccountStateProof({
@@ -266,10 +269,12 @@ contract StateProofVerificationTest is Test {
             InheritanceManager.AccountStillActive.selector
         ));
         
+        // Generate block header RLP for the claim block
+        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlock);
+
         inheritanceManager.claimInheritanceWithProof(
             accountOwner,
-            claimBlock,
-            claimBlockHash,
+            claimBlockHeaderRLP,
             activeStateProof
         );
     }
@@ -299,11 +304,13 @@ contract StateProofVerificationTest is Test {
         vm.expectRevert(abi.encodeWithSelector(
             InheritanceManager.InvalidStateProof.selector
         ));
-        
+
+        // Generate block header RLP for the inactivity block
+        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(inactivityBlock);
+
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
-            inactivityBlock,
-            inactivityBlockHash,
+            blockHeaderRLP,
             invalidStateProof
         );
     }
@@ -329,15 +336,15 @@ contract StateProofVerificationTest is Test {
         uint256 inactivityBlock = TEST_BLOCK + 100;
         bytes32 invalidBlockHash = keccak256("invalid_block_hash");
         
-        // Should revert with InvalidBlockHash
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.InvalidBlockHash.selector
-        ));
-        
+        // Should revert with block header hash mismatch
+        vm.expectRevert("Block header hash mismatch");
+
+        // Generate invalid block header RLP (will not match blockhash)
+        bytes memory invalidBlockHeaderRLP = abi.encode("invalid_block_header");
+
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
-            inactivityBlock,
-            invalidBlockHash,
+            invalidBlockHeaderRLP,
             validStateProof
         );
     }
