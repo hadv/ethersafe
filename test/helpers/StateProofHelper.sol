@@ -16,16 +16,20 @@ contract StateProofHelper {
      * @return blockHeaderRLP The mock block header (tests should mock blockhash)
      */
     function generateBlockHeaderRLP(uint256 blockNumber) external pure returns (bytes memory) {
-        // Create a deterministic state root for this block
+        // For testing, create a very simple mock header that contains the essential data
+        // The production contract will need to be able to extract block number and state root
+
         bytes32 stateRoot = keccak256(abi.encodePacked("test_state_root", blockNumber));
 
-        // Create a simple mock block header structure
-        // Tests should use vm.mockCall to make blockhash(blockNumber) return keccak256(this header)
-        return abi.encodePacked(
-            "TEST_HEADER_",  // Prefix to identify as test data
-            blockNumber,     // Block number (for extraction)
-            stateRoot       // State root (for extraction)
-        );
+        // Create a simple test header format that can be parsed
+        // Format: [blockNumber, stateRoot] encoded as a simple RLP list
+        bytes memory blockNumberRLP = _encodeRLPUint(blockNumber);
+        bytes memory stateRootRLP = _encodeRLPBytes32(stateRoot);
+
+        bytes memory content = abi.encodePacked(blockNumberRLP, stateRootRLP);
+
+        // Wrap as RLP list
+        return abi.encodePacked(bytes1(uint8(0xc0 + content.length)), content);
     }
 
     /**
@@ -37,6 +41,84 @@ contract StateProofHelper {
         bytes memory header = this.generateBlockHeaderRLP(blockNumber);
         return keccak256(header);
     }
+
+
+
+    /**
+     * @dev Encode data as RLP list
+     */
+    function _encodeRLPList(bytes memory data) internal pure returns (bytes memory) {
+        if (data.length <= 55) {
+            return abi.encodePacked(bytes1(uint8(0xc0 + data.length)), data);
+        } else {
+            // For longer lists, we need length encoding
+            bytes memory lengthBytes = _uintToBytes(data.length);
+            return abi.encodePacked(
+                bytes1(uint8(0xf7 + lengthBytes.length)),
+                lengthBytes,
+                data
+            );
+        }
+    }
+
+    /**
+     * @dev Convert uint to minimal bytes representation
+     */
+    function _uintToBytes(uint256 value) internal pure returns (bytes memory) {
+        if (value == 0) {
+            return new bytes(1);
+        }
+
+        uint256 length = 0;
+        uint256 temp = value;
+        while (temp > 0) {
+            length++;
+            temp >>= 8;
+        }
+
+        bytes memory result = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            result[length - 1 - i] = bytes1(uint8(value >> (i * 8)));
+        }
+
+        return result;
+    }
+
+    /**
+     * @dev Encode address as RLP
+     */
+    function _encodeRLPAddress(address value) internal pure returns (bytes memory) {
+        return abi.encodePacked(bytes1(0x94), value); // 0x94 = 0x80 + 20
+    }
+
+    /**
+     * @dev Encode bytes as RLP
+     */
+    function _encodeRLPBytes(bytes memory value) internal pure returns (bytes memory) {
+        if (value.length == 0) {
+            return hex"80";
+        }
+
+        if (value.length == 1 && uint8(value[0]) < 0x80) {
+            return value;
+        }
+
+        if (value.length <= 55) {
+            return abi.encodePacked(bytes1(uint8(0x80 + value.length)), value);
+        }
+
+        // Long string encoding
+        bytes memory lengthBytes = _uintToBytes(value.length);
+        return abi.encodePacked(
+            bytes1(uint8(0xb7 + lengthBytes.length)),
+            lengthBytes,
+            value
+        );
+    }
+
+
+
+
 
     /**
      * @dev Generate a simple account proof for testing
@@ -333,7 +415,7 @@ contract StateProofHelper {
     /**
      * @dev Simple RLP encoding for uint256 values
      */
-    function _encodeRLPUint(uint256 value) private pure returns (bytes memory) {
+    function _encodeRLPUint(uint256 value) internal pure returns (bytes memory) {
         if (value == 0) {
             return hex"80"; // RLP encoding of 0
         }
@@ -365,7 +447,7 @@ contract StateProofHelper {
     /**
      * @dev Simple RLP encoding for bytes32 values
      */
-    function _encodeRLPBytes32(bytes32 value) private pure returns (bytes memory) {
+    function _encodeRLPBytes32(bytes32 value) internal pure returns (bytes memory) {
         return abi.encodePacked(uint8(0xa0), value); // 0xa0 = 0x80 + 32
     }
 

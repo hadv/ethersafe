@@ -119,18 +119,7 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory accountStateProof
     ) public pure returns (bool isValid) {
-        // Check if this is a test state root (has specific test pattern)
-        // Test state roots start with a specific pattern we can detect
-        bytes32 testPattern = 0x7465737400000000000000000000000000000000000000000000000000000000; // "test" in hex
-        if ((stateRoot & 0xffffffff00000000000000000000000000000000000000000000000000000000) == testPattern) {
-            // Test mode - simplified verification
-            // Just check that the proof is not empty and has reasonable values
-            return accountStateProof.proof.length > 0 &&
-                   accountStateProof.nonce >= 0 &&
-                   accountStateProof.balance >= 0;
-        }
-
-        // Production mode - full cryptographic verification
+        // Full cryptographic verification
         // Encode the account state according to Ethereum's RLP encoding
         // Account state: [nonce, balance, storageHash, codeHash]
         bytes memory accountRLP = abi.encodePacked(
@@ -185,15 +174,7 @@ contract InheritanceManager {
 
         // Verify the block header hash matches the on-chain block hash
         bytes32 actualBlockHash = keccak256(blockHeaderRLP);
-
-        // For test headers (starting with "TEST_HEADER_"), skip hash verification
-        if (blockHeaderRLP.length >= 12 &&
-            keccak256(blockHeaderRLP[0:12]) == keccak256("TEST_HEADER_")) {
-            // Test mode - skip block hash verification
-        } else {
-            // Production mode - verify block hash
-            require(actualBlockHash == expectedBlockHash, "Block header hash mismatch");
-        }
+        require(actualBlockHash == expectedBlockHash, "Block header hash mismatch");
     }
 
     /**
@@ -213,26 +194,7 @@ contract InheritanceManager {
     function _decodeBlockNumberAndStateRoot(
         bytes calldata rlpData
     ) internal pure returns (uint256 blockNumber, bytes32 stateRoot) {
-        // Check if this is a test header (starts with "TEST_HEADER_")
-        if (rlpData.length >= 12 &&
-            keccak256(rlpData[0:12]) == keccak256("TEST_HEADER_")) {
-            // Test format: "TEST_HEADER_" + blockNumber (32 bytes) + stateRoot (32 bytes)
-            require(rlpData.length >= 76, "Invalid test header length"); // 12 + 32 + 32
-
-            // Extract block number (bytes 12-44)
-            assembly {
-                blockNumber := calldataload(add(rlpData.offset, 12))
-            }
-
-            // Extract state root (bytes 44-76)
-            assembly {
-                stateRoot := calldataload(add(rlpData.offset, 44))
-            }
-
-            return (blockNumber, stateRoot);
-        }
-
-        // Production RLP decoding for real Ethereum block headers
+        // RLP decoding for Ethereum block headers
         uint256 offset = 0;
 
         // Skip the list prefix
