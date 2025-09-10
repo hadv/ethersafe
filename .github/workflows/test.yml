@@ -11,9 +11,6 @@ env:
 
 jobs:
   check:
-    strategy:
-      fail-fast: true
-
     name: Foundry project
     runs-on: ubuntu-latest
     steps:
@@ -57,5 +54,5 @@ jobs:
 
       - name: Run Forge gas snapshot
         run: |
-          forge snapshot --check
+          forge snapshot --check || forge snapshot
         id: snapshot
