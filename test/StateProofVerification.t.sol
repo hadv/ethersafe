@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "./helpers/StateProofHelper.sol";
 
 /**
  * @title State Proof Verification Tests
@@ -10,6 +11,7 @@ import "../src/InheritanceManager.sol";
  */
 contract StateProofVerificationTest is Test {
     InheritanceManager public inheritanceManager;
+    StateProofHelper public stateProofHelper;
     
     address public accountOwner = address(0x1);
     address public inheritor = address(0x2);
@@ -21,58 +23,88 @@ contract StateProofVerificationTest is Test {
     
     function setUp() public {
         inheritanceManager = new InheritanceManager();
+        stateProofHelper = new StateProofHelper();
         vm.deal(accountOwner, 10 ether);
     }
     
     function testVerifyAccountStateWithValidProof() public {
-        // Create a valid account state proof
-        bytes32[] memory proof = new bytes32[](2);
-        proof[0] = keccak256("proof_element_1");
-        proof[1] = keccak256("proof_element_2");
-        
-        InheritanceManager.AccountStateProof memory stateProof = InheritanceManager.AccountStateProof({
+        // Create a real account state
+        InheritanceManager.AccountStateProof memory targetState = InheritanceManager.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("storage_root"),
             codeHash: keccak256("code_hash"),
-            proof: proof
+            proof: new bytes32[](0) // Will be filled by helper
         });
-        
-        bytes32 stateRoot = keccak256("state_root");
-        
-        // This should return true for production proofs (when not using mock values)
-        bool isValid = inheritanceManager.verifyAccountState(accountOwner, stateRoot, stateProof);
-        
-        // With our current implementation, this will be false for non-mock proofs
-        assertFalse(isValid);
-    }
-    
-    function testVerifyAccountStateWithMockProof() public {
-        // Create a mock account state proof (for testing)
-        bytes32[] memory mockProof = new bytes32[](1);
-        mockProof[0] = keccak256("mock_proof");
-        
-        InheritanceManager.AccountStateProof memory mockStateProof = InheritanceManager.AccountStateProof({
-            nonce: 42,
-            balance: 5 ether,
-            storageHash: keccak256("mock_storage"),
-            codeHash: keccak256("mock_code"),
-            proof: mockProof
+
+        // Create some other accounts for the state trie
+        address[] memory otherAccounts = new address[](2);
+        otherAccounts[0] = address(0x3);
+        otherAccounts[1] = address(0x4);
+
+        InheritanceManager.AccountStateProof[] memory otherStates =
+            new InheritanceManager.AccountStateProof[](2);
+        otherStates[0] = InheritanceManager.AccountStateProof({
+            nonce: 10,
+            balance: 1 ether,
+            storageHash: keccak256("other_storage_1"),
+            codeHash: keccak256("other_code_1"),
+            proof: new bytes32[](0)
         });
-        
-        bytes32 stateRoot = keccak256("mock_state_root");
-        
-        // Mock proofs should always be valid in our test implementation
-        bool isValid = inheritanceManager.verifyAccountState(accountOwner, stateRoot, mockStateProof);
+        otherStates[1] = InheritanceManager.AccountStateProof({
+            nonce: 20,
+            balance: 2 ether,
+            storageHash: keccak256("other_storage_2"),
+            codeHash: keccak256("other_code_2"),
+            proof: new bytes32[](0)
+        });
+
+        // Generate real state proof
+        (bytes32 stateRoot, bytes32[] memory proof) = stateProofHelper.generateSingleStateProof(
+            accountOwner,
+            targetState,
+            otherAccounts,
+            otherStates
+        );
+
+        // Update the proof in the target state
+        targetState.proof = proof;
+
+        // Verify the real state proof
+        bool isValid = inheritanceManager.verifyAccountState(accountOwner, stateRoot, targetState);
         assertTrue(isValid);
     }
     
+    function testVerifyAccountStateWithInvalidProof() public {
+        // Create an invalid account state proof
+        bytes32[] memory invalidProof = new bytes32[](1);
+        invalidProof[0] = keccak256("invalid_proof");
+
+        InheritanceManager.AccountStateProof memory invalidStateProof = InheritanceManager.AccountStateProof({
+            nonce: 42,
+            balance: 5 ether,
+            storageHash: keccak256("storage_root"),
+            codeHash: keccak256("code_hash"),
+            proof: invalidProof
+        });
+
+        bytes32 randomStateRoot = keccak256("random_state_root");
+
+        // Invalid proofs should be rejected
+        bool isValid = inheritanceManager.verifyAccountState(accountOwner, randomStateRoot, invalidStateProof);
+        assertFalse(isValid);
+    }
+    
     function testVerifyBlockHashWithValidHash() public {
-        uint256 blockNumber = 500;
-        bytes32 mockBlockHash = keccak256(abi.encodePacked("mock_block_hash", blockNumber));
-        
-        // Mock block hashes should be valid
-        bool isValid = inheritanceManager.verifyBlockHash(blockNumber, mockBlockHash);
+        // Move to a specific block number
+        vm.roll(1000);
+
+        // Get a recent block hash (within 256 block limit)
+        uint256 blockNumber = block.number - 10;
+        bytes32 actualBlockHash = blockhash(blockNumber);
+
+        // Real block hashes should be valid
+        bool isValid = inheritanceManager.verifyBlockHash(blockNumber, actualBlockHash);
         assertTrue(isValid);
     }
     
@@ -98,58 +130,87 @@ contract StateProofVerificationTest is Test {
         // Configure inheritance
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
-        // Create mock state proof for marking inactivity
-        bytes32[] memory mockProof = new bytes32[](1);
-        mockProof[0] = keccak256("mock_proof");
-        
-        InheritanceManager.AccountStateProof memory initialStateProof = InheritanceManager.AccountStateProof({
+
+        // Create real state proof for marking inactivity
+        InheritanceManager.AccountStateProof memory initialState = InheritanceManager.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
-            storageHash: keccak256("mock_storage"),
-            codeHash: keccak256("mock_code"),
-            proof: mockProof
+            storageHash: keccak256("storage_root"),
+            codeHash: keccak256("code_hash"),
+            proof: new bytes32[](0) // Will be filled by helper
         });
-        
+
+        // Create other accounts for the state trie
+        address[] memory otherAccounts = new address[](1);
+        otherAccounts[0] = address(0x3);
+
+        InheritanceManager.AccountStateProof[] memory otherStates =
+            new InheritanceManager.AccountStateProof[](1);
+        otherStates[0] = InheritanceManager.AccountStateProof({
+            nonce: 10,
+            balance: 1 ether,
+            storageHash: keccak256("other_storage"),
+            codeHash: keccak256("other_code"),
+            proof: new bytes32[](0)
+        });
+
+        // Generate real state proof
+        (bytes32 stateRoot, bytes32[] memory proof) = stateProofHelper.generateSingleStateProof(
+            accountOwner,
+            initialState,
+            otherAccounts,
+            otherStates
+        );
+        initialState.proof = proof;
+
         // Mark inactivity with state proof
         vm.roll(TEST_BLOCK + 100);
         uint256 inactivityBlock = TEST_BLOCK + 100;
-        bytes32 inactivityBlockHash = keccak256(abi.encodePacked("mock_block_hash", inactivityBlock));
-        
+        bytes32 inactivityBlockHash = blockhash(inactivityBlock);
+
         vm.expectEmit(true, false, false, true);
         emit InactivityMarked(accountOwner, inactivityBlock, 42, 5 ether);
-        
+
         inheritanceManager.markInactivityStartWithProof(
             accountOwner,
             inactivityBlock,
             inactivityBlockHash,
-            initialStateProof
+            initialState
         );
         
         // Wait for inactivity period
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes32 claimBlockHash = keccak256(abi.encodePacked("mock_block_hash", claimBlock));
-        
-        // Create state proof showing account is still inactive (same nonce and balance)
-        InheritanceManager.AccountStateProof memory currentStateProof = InheritanceManager.AccountStateProof({
+        bytes32 claimBlockHash = blockhash(claimBlock);
+
+        // Create state proof showing account is still inactive (same nonce)
+        InheritanceManager.AccountStateProof memory currentState = InheritanceManager.AccountStateProof({
             nonce: 42, // Same nonce (inactive)
-            balance: 5 ether, // Same balance (inactive)
-            storageHash: keccak256("mock_storage"),
-            codeHash: keccak256("mock_code"),
-            proof: mockProof
+            balance: 5 ether, // Balance can change, but nonce is what matters
+            storageHash: keccak256("storage_root"),
+            codeHash: keccak256("code_hash"),
+            proof: new bytes32[](0)
         });
-        
+
+        // Generate state proof for current state
+        (bytes32 currentStateRoot, bytes32[] memory currentProof) = stateProofHelper.generateSingleStateProof(
+            accountOwner,
+            currentState,
+            otherAccounts,
+            otherStates
+        );
+        currentState.proof = currentProof;
+
         // Claim inheritance with state proof
         vm.prank(inheritor);
         vm.expectEmit(true, true, false, false);
         emit InheritanceClaimed(accountOwner, inheritor);
-        
+
         inheritanceManager.claimInheritanceWithProof(
             accountOwner,
             claimBlock,
             claimBlockHash,
-            currentStateProof
+            currentState
         );
         
         // Verify inheritance was claimed
