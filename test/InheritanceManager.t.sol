@@ -175,13 +175,15 @@ contract InheritanceManagerTest is Test {
         // Step 1: Configure inheritance
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
+
+
         
         // Step 2: Mark inactivity start (no asset registration needed!)
-        uint256 currentBlock = block.number;
+        uint256 inactivityBlock = block.number;
 
         // Use test helper to create test data
-        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(currentBlock);
-        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(currentBlock, testStateRoot);
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(inactivityBlock);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(inactivityBlock, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -192,17 +194,21 @@ contract InheritanceManagerTest is Test {
         });
 
         inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
-        
+
+
+
         // Step 3: Wait for inactivity period
-        vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
+        vm.roll(inactivityBlock + INACTIVITY_PERIOD + 1);
 
         // Step 4: Claim inheritance
         vm.prank(inheritor);
-        
+
+
+
         vm.expectEmit(true, true, false, false);
         emit InheritanceClaimed(accountOwner, inheritor);
-        
-        uint256 claimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
+
+        uint256 claimBlockNumber = inactivityBlock + INACTIVITY_PERIOD + 1;
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
@@ -219,6 +225,80 @@ contract InheritanceManagerTest is Test {
         // Verify inheritance claimed
         assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
         assertEq(inheritanceManager.authorizedSigners(accountOwner), inheritor);
+    }
+
+    function testClaimInheritanceDirectDebug() public {
+        // Configure inheritance
+        vm.prank(accountOwner);
+        inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
+
+        // Mark inactivity directly
+        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42);
+
+        // Move forward in time
+        vm.roll(1000 + INACTIVITY_PERIOD + 1);
+
+        // Try to claim directly
+        vm.prank(inheritor);
+        inheritanceManager.claimInheritanceDirect(accountOwner, 1000 + INACTIVITY_PERIOD + 1, 42);
+
+        // Verify inheritance claimed
+        assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
+    }
+
+    function testCallerDebug() public {
+        // Test who the caller is when using vm.prank
+        vm.prank(inheritor);
+        address caller = inheritanceManager.whoIsCaller();
+        assertEq(caller, inheritor, "Caller should be inheritor");
+
+        // Test what caller is received in claimInheritanceWithProof
+        vm.prank(inheritor);
+        bytes memory dummyHeader = hex"00";
+        InheritanceManager.AccountStateProof memory dummyProof = InheritanceManager.AccountStateProof({
+            nonce: 0,
+            balance: 0,
+            storageHash: bytes32(0),
+            codeHash: bytes32(0),
+            proof: new bytes32[](0)
+        });
+        address claimCaller = inheritanceManager.debugClaimInheritanceWithProof(accountOwner, dummyHeader, dummyProof);
+        assertEq(claimCaller, inheritor, "Claim caller should be inheritor");
+
+        // Test authorization check
+        vm.prank(accountOwner);
+        inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
+
+        (address configuredInheritor, bool isAuthorized) = inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
+        assertEq(configuredInheritor, inheritor, "Configured inheritor should match");
+        assertTrue(isAuthorized, "Inheritor should be authorized");
+
+        // Test the exact same logic as used in _claimInheritanceInternal
+        bool internalAuth = inheritanceManager.debugAuthorizationInternal(accountOwner, inheritor);
+        assertTrue(internalAuth, "Internal authorization should pass");
+    }
+
+    function testMinimalClaimReproduction() public {
+        // Minimal reproduction of the claim issue
+        vm.prank(accountOwner);
+        inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
+
+        // Mark inactivity
+        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42);
+
+        // Move forward in time
+        vm.roll(1000 + INACTIVITY_PERIOD + 1);
+
+        // Check authorization before claim
+        (address configuredInheritor, bool isAuthorized) = inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
+        assertEq(configuredInheritor, inheritor, "Configured inheritor should match");
+        assertTrue(isAuthorized, "Inheritor should be authorized");
+
+        // Try to claim with the exact same addresses
+        vm.prank(inheritor);
+        inheritanceManager.claimInheritanceDirect(accountOwner, 1000 + INACTIVITY_PERIOD + 1, 42);
+
+        assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
     }
 
     function testInheritanceClaimTooEarly() public {
@@ -243,12 +323,7 @@ contract InheritanceManagerTest is Test {
         
         // Try to claim before period ends
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2);
-        
-        vm.prank(inheritor);
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.InactivityPeriodNotMet.selector
-        ));
-        
+
         uint256 earlyClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2;
         bytes32 earlyClaimStateRoot = inheritanceManager.createTestStateRoot(earlyClaimBlockNumber);
         bytes memory earlyClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(earlyClaimBlockNumber, earlyClaimStateRoot);
@@ -261,6 +336,10 @@ contract InheritanceManagerTest is Test {
             proof: stateProofHelper.generateAccountProof(accountOwner, 42, 5 ether)
         });
 
+        vm.prank(inheritor);
+        vm.expectRevert(abi.encodeWithSelector(
+            InheritanceManager.InactivityPeriodNotMet.selector
+        ));
         inheritanceManager.claimInheritanceWithProof(accountOwner, earlyClaimBlockHeaderRLP, earlyClaimAccountStateProof);
     }
 
@@ -286,13 +365,7 @@ contract InheritanceManagerTest is Test {
         
         // Wait for period to pass
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
-        
-        // Try to claim with different nonce (account became active)
-        vm.prank(inheritor);
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.AccountStillActive.selector
-        ));
-        
+
         uint256 activeClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
         bytes32 activeClaimStateRoot = inheritanceManager.createTestStateRoot(activeClaimBlockNumber);
         bytes memory activeClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(activeClaimBlockNumber, activeClaimStateRoot);
@@ -305,6 +378,11 @@ contract InheritanceManagerTest is Test {
             proof: stateProofHelper.generateAccountProof(accountOwner, 43, 5 ether)
         });
 
+        // Try to claim with different nonce (account became active)
+        vm.prank(inheritor);
+        vm.expectRevert(abi.encodeWithSelector(
+            InheritanceManager.AccountStillActive.selector
+        ));
         inheritanceManager.claimInheritanceWithProof(accountOwner, activeClaimBlockHeaderRLP, activeClaimAccountStateProof);
     }
 
