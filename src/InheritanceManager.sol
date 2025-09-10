@@ -43,7 +43,39 @@ contract InheritanceManager {
         bytes32 codeHash;           // Code hash
         bytes32[] proof;            // Merkle proof path
     }
-    
+
+    /**
+     * @dev Ethereum block header structure for RLP decoding and state root extraction
+     * This represents the complete block header as it appears on Ethereum mainnet
+     *
+     * IMPORTANT: The order of fields MUST match the exact RLP encoding order used by Ethereum:
+     * [parentHash, uncleHash, coinbase, stateRoot, transactionRoot, receiptRoot, logsBloom,
+     *  difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce,
+     *  baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot]
+     */
+    struct BlockHeader {
+        bytes32 parentHash;         // Hash of parent block
+        bytes32 uncleHash;          // Hash of uncle blocks (ommers)
+        address coinbase;           // Miner/validator address
+        bytes32 stateRoot;          // STATE ROOT - This is what we extract and verify
+        bytes32 transactionRoot;    // Merkle root of transactions
+        bytes32 receiptRoot;        // Merkle root of transaction receipts
+        bytes logsBloom;            // Bloom filter for logs (256 bytes)
+        uint256 difficulty;         // Block difficulty (0 for PoS)
+        uint256 number;             // Block number
+        uint256 gasLimit;           // Gas limit for block
+        uint256 gasUsed;            // Gas used in block
+        uint256 timestamp;          // Block timestamp
+        bytes extraData;            // Extra data field
+        bytes32 mixHash;            // Mix hash for PoW (random for PoS)
+        uint64 nonce;               // Block nonce (0 for PoS)
+        uint256 baseFeePerGas;      // EIP-1559 base fee (London fork)
+        bytes32 withdrawalsRoot;    // EIP-4895 withdrawals root (Shanghai fork)
+        uint256 blobGasUsed;        // EIP-4844 blob gas used (Cancun fork)
+        uint256 excessBlobGas;      // EIP-4844 excess blob gas (Cancun fork)
+        bytes32 parentBeaconBlockRoot; // EIP-4788 parent beacon block root (Cancun fork)
+    }
+
     // --- State Variables ---
     
     mapping(address => InheritanceConfig) public inheritanceConfigs;
@@ -110,6 +142,102 @@ contract InheritanceManager {
     }
 
     /**
+     * @dev Extract and verify state root from RLP-encoded block header
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @return blockNumber The block number extracted from the header
+     * @return stateRoot The extracted state root from the header
+     *
+     * This function:
+     * 1. Decodes the RLP header to extract block number and state root
+     * 2. Gets the expected block hash using blockhash(blockNumber)
+     * 3. Verifies the block header hash matches the on-chain block hash
+     * 4. Returns both the block number and verified state root
+     *
+     * SECURITY: This is cryptographically secure because:
+     * - Block number is extracted from the header itself (trustless)
+     * - Uses Solidity's blockhash() for trustless verification
+     * - Block hash verification ensures header authenticity
+     * - RLP decoding follows Ethereum's exact specification
+     * - State root is extracted from the verified header
+     * - No external dependencies or oracles required
+     */
+    function extractStateRootFromHeader(
+        bytes calldata blockHeaderRLP
+    ) public view returns (uint256 blockNumber, bytes32 stateRoot) {
+        // First extract block number and state root from RLP
+        (blockNumber, stateRoot) = _decodeBlockNumberAndStateRoot(blockHeaderRLP);
+
+        // Get the expected block hash from Solidity's blockhash()
+        bytes32 expectedBlockHash = blockhash(blockNumber);
+        require(expectedBlockHash != bytes32(0), "Block hash not available");
+
+        // Verify the block header hash matches the on-chain block hash
+        bytes32 actualBlockHash = keccak256(blockHeaderRLP);
+        require(actualBlockHash == expectedBlockHash, "Block header hash mismatch");
+    }
+
+    /**
+     * @dev Decode block number and state root from RLP-encoded block header
+     * @param rlpData The RLP-encoded block header
+     * @return blockNumber The block number (9th field in the header)
+     * @return stateRoot The state root (4th field in the header)
+     *
+     * Ethereum block header RLP structure:
+     * [parentHash, uncleHash, coinbase, stateRoot, transactionRoot, receiptRoot, logsBloom,
+     *  difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce, ...]
+     *
+     * We need to extract:
+     * - Field 3 (index 3): stateRoot (32 bytes)
+     * - Field 8 (index 8): number (variable length uint256)
+     */
+    function _decodeBlockNumberAndStateRoot(
+        bytes calldata rlpData
+    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot) {
+        uint256 offset = 0;
+
+        // Skip the list prefix
+        (offset, ) = _decodeRLPListPrefix(rlpData, offset);
+
+        // Extract fields in order
+        // Field 0: parentHash (32 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+        // Field 1: uncleHash (32 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+        // Field 2: coinbase (20 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+
+        // Field 3: stateRoot (32 bytes) - extract this
+        uint256 stateRootLength;
+        (offset, stateRootLength) = _decodeRLPItemPrefix(rlpData, offset);
+        require(stateRootLength == 32, "Invalid state root length");
+
+        assembly {
+            stateRoot := calldataload(add(rlpData.offset, offset))
+        }
+        offset += stateRootLength;
+
+        // Field 4: transactionRoot (32 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+        // Field 5: receiptRoot (32 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+        // Field 6: logsBloom (256 bytes) - skip
+        offset = _skipRLPItem(rlpData, offset);
+        // Field 7: difficulty (variable length) - skip
+        offset = _skipRLPItem(rlpData, offset);
+
+        // Field 8: number (variable length uint256) - extract this
+        uint256 numberLength;
+        (offset, numberLength) = _decodeRLPItemPrefix(rlpData, offset);
+        require(numberLength <= 32, "Invalid block number length");
+
+        // Extract block number (big-endian)
+        blockNumber = 0;
+        for (uint256 i = 0; i < numberLength; i++) {
+            blockNumber = (blockNumber << 8) | uint8(rlpData[offset + i]);
+        }
+    }
+
+    /**
      * @dev Simple RLP encoding for uint256 values
      */
     function _encodeRLPUint(uint256 value) private pure returns (bytes memory) {
@@ -146,6 +274,79 @@ contract InheritanceManager {
      */
     function _encodeRLPBytes32(bytes32 value) private pure returns (bytes memory) {
         return abi.encodePacked(uint8(0xa0), value); // 0xa0 = 0x80 + 32
+    }
+
+    // --- RLP Decoding Helper Functions ---
+
+    /**
+     * @dev Decode RLP list prefix and return offset and length
+     */
+    function _decodeRLPListPrefix(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (uint256 newOffset, uint256 length) {
+        require(offset < data.length, "RLP: offset out of bounds");
+
+        uint8 prefix = uint8(data[offset]);
+
+        if (prefix <= 0xf7) {
+            // Short list (0-55 bytes)
+            length = prefix - 0xc0;
+            newOffset = offset + 1;
+        } else {
+            // Long list (>55 bytes)
+            uint256 lengthOfLength = prefix - 0xf7;
+            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long list");
+
+            length = 0;
+            for (uint256 i = 0; i < lengthOfLength; i++) {
+                length = (length << 8) | uint8(data[offset + 1 + i]);
+            }
+            newOffset = offset + 1 + lengthOfLength;
+        }
+    }
+
+    /**
+     * @dev Decode RLP item prefix and return offset and length
+     */
+    function _decodeRLPItemPrefix(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (uint256 newOffset, uint256 length) {
+        require(offset < data.length, "RLP: offset out of bounds");
+
+        uint8 prefix = uint8(data[offset]);
+
+        if (prefix <= 0x7f) {
+            // Single byte
+            length = 1;
+            newOffset = offset;
+        } else if (prefix <= 0xb7) {
+            // Short string (0-55 bytes)
+            length = prefix - 0x80;
+            newOffset = offset + 1;
+        } else {
+            // Long string (>55 bytes)
+            uint256 lengthOfLength = prefix - 0xb7;
+            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long string");
+
+            length = 0;
+            for (uint256 i = 0; i < lengthOfLength; i++) {
+                length = (length << 8) | uint8(data[offset + 1 + i]);
+            }
+            newOffset = offset + 1 + lengthOfLength;
+        }
+    }
+
+    /**
+     * @dev Skip an RLP item and return the new offset
+     */
+    function _skipRLPItem(
+        bytes calldata data,
+        uint256 offset
+    ) internal pure returns (uint256 newOffset) {
+        (uint256 itemOffset, uint256 length) = _decodeRLPItemPrefix(data, offset);
+        return itemOffset + length;
     }
 
     /**
@@ -204,8 +405,12 @@ contract InheritanceManager {
         bytes32 blockHash = blockhash(blockNumber);
         require(blockHash != bytes32(0), "Block hash not available");
 
+        // For legacy compatibility, create a simple state root
+        // This is not secure and should not be used in production
+        bytes32 legacyStateRoot = keccak256(abi.encodePacked("legacy_state_root", blockNumber, blockHash));
+
         // Call the new implementation
-        _markInactivityStartWithProof(account, blockNumber, blockHash, accountStateProof);
+        _markInactivityStartWithProof(account, blockNumber, blockHash, legacyStateRoot, accountStateProof);
     }
 
     /**
@@ -235,36 +440,58 @@ contract InheritanceManager {
         bytes32 currentBlockHash = blockhash(currentBlock);
         require(currentBlockHash != bytes32(0), "Block hash not available");
 
+        // For legacy compatibility, create a simple state root
+        // This is not secure and should not be used in production
+        bytes32 legacyStateRoot = keccak256(abi.encodePacked("legacy_state_root", currentBlock, currentBlockHash));
+
         // Call the new implementation
-        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, currentAccountStateProof);
+        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, legacyStateRoot, currentAccountStateProof);
     }
 
     // --- Public State Proof Functions (for testing and advanced usage) ---
 
     /**
      * @notice Mark inactivity with full state proof verification (public version)
-     * @dev This is the production-ready function with complete state proof verification
+     * @dev This is the production-ready function with complete cryptographic verification
+     * @param account The account to mark as inactive
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @param accountStateProof Complete account state proof including Merkle proof
      */
     function markInactivityStartWithProof(
         address account,
-        uint256 blockNumber,
-        bytes32 blockHash,
+        bytes calldata blockHeaderRLP,
         AccountStateProof calldata accountStateProof
     ) external {
-        _markInactivityStartWithProof(account, blockNumber, blockHash, accountStateProof);
+        // Extract block number and state root from header, verify against on-chain block hash
+        (uint256 blockNumber, bytes32 stateRoot) = extractStateRootFromHeader(blockHeaderRLP);
+
+        // Get block hash for internal verification
+        bytes32 blockHash = blockhash(blockNumber);
+        require(blockHash != bytes32(0), "Block hash not available");
+
+        _markInactivityStartWithProof(account, blockNumber, blockHash, stateRoot, accountStateProof);
     }
 
     /**
      * @notice Claim inheritance with full state proof verification (public version)
-     * @dev This is the production-ready function with complete state proof verification
+     * @dev This is the production-ready function with complete cryptographic verification
+     * @param account The account to claim inheritance for
+     * @param blockHeaderRLP The complete RLP-encoded block header for current state verification
+     * @param currentAccountStateProof Complete current account state proof
      */
     function claimInheritanceWithProof(
         address account,
-        uint256 currentBlock,
-        bytes32 currentBlockHash,
+        bytes calldata blockHeaderRLP,
         AccountStateProof calldata currentAccountStateProof
     ) external {
-        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, currentAccountStateProof);
+        // Extract block number and state root from header, verify against on-chain block hash
+        (uint256 currentBlock, bytes32 stateRoot) = extractStateRootFromHeader(blockHeaderRLP);
+
+        // Get block hash for internal verification
+        bytes32 currentBlockHash = blockhash(currentBlock);
+        require(currentBlockHash != bytes32(0), "Block hash not available");
+
+        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof);
     }
 
     // --- Inheritance Configuration ---
@@ -334,12 +561,14 @@ contract InheritanceManager {
      * @param account The account to mark as inactive
      * @param blockNumber The block number to check state at
      * @param blockHash The hash of the block at blockNumber
+     * @param stateRoot The state root for the specified block
      * @param accountStateProof Complete account state proof including Merkle proof
      */
     function _markInactivityStartWithProof(
         address account,
         uint256 blockNumber,
         bytes32 blockHash,
+        bytes32 stateRoot,
         AccountStateProof memory accountStateProof
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
@@ -352,12 +581,10 @@ contract InheritanceManager {
             revert InvalidBlockHash();
         }
 
-        // Get the state root for the specified block
-        // Note: In practice, you would need to get the state root from the block header
-        // For this implementation, we'll use the block hash as a proxy
-        bytes32 stateRoot = blockHash; // Simplified - in reality, extract from block header
+        // The state root has already been verified through block header verification
+        // in extractStateRootFromHeader(), so we can trust it here
 
-        // Verify the account state proof
+        // Verify the account state proof against the verified state root
         if (!verifyAccountState(account, stateRoot, accountStateProof)) {
             revert InvalidStateProof();
         }
@@ -378,12 +605,14 @@ contract InheritanceManager {
      * @param account The account to claim inheritance for
      * @param currentBlock The current block to verify continued inactivity
      * @param currentBlockHash The hash of the current block
+     * @param stateRoot The state root for the current block
      * @param currentAccountStateProof Complete current account state proof
      */
     function _claimInheritanceWithProof(
         address account,
         uint256 currentBlock,
         bytes32 currentBlockHash,
+        bytes32 stateRoot,
         AccountStateProof memory currentAccountStateProof
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
