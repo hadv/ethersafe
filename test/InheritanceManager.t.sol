@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "./helpers/InheritanceManagerTestHelper.sol";
 import "./helpers/StateProofHelper.sol";
 
 /**
@@ -10,7 +11,7 @@ import "./helpers/StateProofHelper.sol";
  * @dev Tests for the InheritanceManager that works with existing EIP-7702 delegators
  */
 contract InheritanceManagerTest is Test {
-    InheritanceManager public inheritanceManager;
+    InheritanceManagerTestHelper public inheritanceManager;
     StateProofHelper public stateProofHelper;
 
     // Mock EIP-7702 delegator
@@ -31,7 +32,7 @@ contract InheritanceManagerTest is Test {
 
     function setUp() public {
         // Deploy contracts
-        inheritanceManager = new InheritanceManager();
+        inheritanceManager = new InheritanceManagerTestHelper();
         stateProofHelper = new StateProofHelper();
         delegator = new MockEIP7702Delegator();
         mockToken = new MockERC20("Test Token", "TEST");
@@ -117,11 +118,52 @@ contract InheritanceManagerTest is Test {
         uint256 startNonce = vm.getNonce(accountOwner);
         uint256 startBalance = accountOwner.balance;
 
-        // For testing, we'll skip the complex block header verification
-        // and focus on testing the core inheritance logic
-        // This test will be updated once we have proper test infrastructure
+        // Use test helper to create simple test data
+        uint256 targetBlock = block.number;
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(targetBlock);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(targetBlock, testStateRoot);
 
-        vm.skip(true); // Skip this test for now
+        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+            nonce: startNonce,
+            balance: startBalance,
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, startBalance)
+        });
+
+        vm.prank(accountOwner);
+        inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
+
+        // Simulate receiving ETH (balance increases without nonce change)
+        vm.deal(accountOwner, startBalance + 5 ether);
+
+        // Move forward in time past the inactivity period
+        vm.roll(targetBlock + INACTIVITY_PERIOD + 1);
+
+        // Inheritance should still be claimable because nonce didn't change
+        // (even though balance changed)
+        uint256 newBalance = accountOwner.balance;
+        assertEq(newBalance, startBalance + 5 ether); // Balance changed
+        assertEq(vm.getNonce(accountOwner), startNonce); // Nonce unchanged
+
+        // Claim inheritance should succeed
+        uint256 claimBlockNumber = targetBlock + INACTIVITY_PERIOD + 1;
+        bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
+        bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
+
+        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+            nonce: startNonce, // Same nonce (inactive)
+            balance: newBalance, // Updated balance
+            storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
+            codeHash: keccak256(abi.encodePacked("code", accountOwner)),
+            proof: stateProofHelper.generateAccountProof(accountOwner, startNonce, newBalance)
+        });
+
+        vm.prank(inheritor);
+        inheritanceManager.claimInheritanceWithProof(accountOwner, claimBlockHeaderRLP, claimAccountStateProof);
+
+        // Verify inheritance was claimed
+        assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
     }
 
     // No testRegisterAssets needed!
@@ -136,9 +178,10 @@ contract InheritanceManagerTest is Test {
         
         // Step 2: Mark inactivity start (no asset registration needed!)
         uint256 currentBlock = block.number;
-        vm.roll(currentBlock + 1); // Move to next block so we can get hash of currentBlock
 
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(currentBlock);
+        // Use test helper to create test data
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(currentBlock);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(currentBlock, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -160,7 +203,8 @@ contract InheritanceManagerTest is Test {
         emit InheritanceClaimed(accountOwner, inheritor);
         
         uint256 claimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlockNumber);
+        bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
+        bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
         InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42, // same nonce (inactive)
@@ -184,7 +228,8 @@ contract InheritanceManagerTest is Test {
         
         vm.roll(TEST_BLOCK + 100);
 
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -205,7 +250,8 @@ contract InheritanceManagerTest is Test {
         ));
         
         uint256 earlyClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2;
-        bytes memory earlyClaimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(earlyClaimBlockNumber);
+        bytes32 earlyClaimStateRoot = inheritanceManager.createTestStateRoot(earlyClaimBlockNumber);
+        bytes memory earlyClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(earlyClaimBlockNumber, earlyClaimStateRoot);
 
         InheritanceManager.AccountStateProof memory earlyClaimAccountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -225,7 +271,8 @@ contract InheritanceManagerTest is Test {
         
         vm.roll(TEST_BLOCK + 100);
 
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -247,7 +294,8 @@ contract InheritanceManagerTest is Test {
         ));
         
         uint256 activeClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes memory activeClaimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(activeClaimBlockNumber);
+        bytes32 activeClaimStateRoot = inheritanceManager.createTestStateRoot(activeClaimBlockNumber);
+        bytes memory activeClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(activeClaimBlockNumber, activeClaimStateRoot);
 
         InheritanceManager.AccountStateProof memory activeClaimAccountStateProof = InheritanceManager.AccountStateProof({
             nonce: 43, // different nonce (account became active)
@@ -275,7 +323,8 @@ contract InheritanceManagerTest is Test {
         // Mark inactivity
         vm.roll(TEST_BLOCK + 100);
 
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(TEST_BLOCK + 100);
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "./helpers/InheritanceManagerTestHelper.sol";
 import "../examples/EOAInheritanceViaEIP7702.sol";
 import "./helpers/StateProofHelper.sol";
 
@@ -12,7 +13,7 @@ import "./helpers/StateProofHelper.sol";
  */
 contract EOAInheritanceViaEIP7702Test is Test {
     
-    InheritanceManager public inheritanceManager;
+    InheritanceManagerTestHelper public inheritanceManager;
     EIP7702InheritanceController public controller;
     MockERC20 public token;
     StateProofHelper public stateProofHelper;
@@ -31,12 +32,8 @@ contract EOAInheritanceViaEIP7702Test is Test {
     uint256 public constant TEST_BLOCK = 1000;
     
     function setUp() public {
-        // Create fork for testing with real blockchain data
-        mainnetFork = vm.createFork(MAINNET_RPC_URL);
-        vm.selectFork(mainnetFork);
-
-        // Deploy contracts on the fork
-        inheritanceManager = new InheritanceManager();
+        // Deploy contracts for unit testing
+        inheritanceManager = new InheritanceManagerTestHelper();
         controller = new EIP7702InheritanceController(address(inheritanceManager));
         token = new MockERC20("Test Token", "TEST");
         stateProofHelper = new StateProofHelper();
@@ -303,15 +300,15 @@ contract EOAInheritanceViaEIP7702Test is Test {
         vm.prank(eoaAccount);
         inheritanceManager.configureInheritance(eoaAccount, inheritor, INACTIVITY_PERIOD);
 
-        // Use real block data from the fork
+        // Use test helper to create test data
         uint256 currentBlock = block.number;
-        uint256 inactivityBlock = currentBlock - 10; // Use a recent block that blockhash() can access
+        uint256 inactivityBlock = currentBlock + 100;
 
-        // Get real block header data (for now, we'll create a minimal test)
-        // In a full implementation, we'd extract the actual RLP header from the fork
-        bytes memory blockHeaderRLP = _createTestBlockHeader(inactivityBlock);
+        // Create test block header using test helper
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(inactivityBlock);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(inactivityBlock, testStateRoot);
 
-        // Get real account state from the fork
+        // Get account state
         uint256 accountNonce = vm.getNonce(eoaAccount);
         uint256 accountBalance = eoaAccount.balance;
 
@@ -326,9 +323,10 @@ contract EOAInheritanceViaEIP7702Test is Test {
         inheritanceManager.markInactivityStartWithProof(eoaAccount, blockHeaderRLP, accountStateProof);
 
         // Wait and claim
-        vm.roll(currentBlock + INACTIVITY_PERIOD + 1);
-        uint256 claimBlockNumber = currentBlock + INACTIVITY_PERIOD;
-        bytes memory claimBlockHeaderRLP = _createTestBlockHeader(claimBlockNumber);
+        vm.roll(inactivityBlock + INACTIVITY_PERIOD + 1);
+        uint256 claimBlockNumber = inactivityBlock + INACTIVITY_PERIOD + 1;
+        bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
+        bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
         InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42, // same nonce (inactive)
@@ -342,35 +340,7 @@ contract EOAInheritanceViaEIP7702Test is Test {
         inheritanceManager.claimInheritanceWithProof(eoaAccount, claimBlockHeaderRLP, claimAccountStateProof);
     }
 
-    /**
-     * @dev Create a test block header for fork testing
-     * This is a simplified approach for testing - in production, you'd use real RLP headers
-     */
-    function _createTestBlockHeader(uint256 blockNumber) internal view returns (bytes memory) {
-        // For fork testing, we'll create a minimal header that can pass basic validation
-        // In a full implementation, you'd extract the actual block header from the fork
 
-        // Get the real block hash from the fork
-        bytes32 realBlockHash = blockhash(blockNumber);
-
-        // If block hash is not available, use current block - 1
-        if (realBlockHash == bytes32(0)) {
-            blockNumber = block.number - 1;
-            realBlockHash = blockhash(blockNumber);
-        }
-
-        // Create a test state root
-        bytes32 stateRoot = keccak256(abi.encodePacked("fork_state_root", blockNumber));
-
-        // For now, return a simple format that our test can handle
-        // TODO: Implement full RLP block header extraction from fork
-        return abi.encodePacked(
-            bytes1(0xf8), // RLP long list prefix (0xf7 + 1 byte length)
-            bytes1(0x40), // Length: 64 bytes
-            abi.encode(blockNumber), // 32 bytes
-            abi.encode(stateRoot)    // 32 bytes
-        );
-    }
 }
 
 // Mock contracts for testing

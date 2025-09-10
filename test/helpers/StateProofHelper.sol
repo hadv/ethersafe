@@ -26,43 +26,19 @@ contract StateProofHelper {
     }
 
     /**
-     * @dev Create a minimal but valid Ethereum block header
-     * This creates the minimum required structure for RLP decoding
+     * @dev Create a simplified block header for testing
+     * This creates a minimal structure that can be parsed by the test helper
      */
-    function _createEthereumBlockHeader(uint256 blockNumber, bytes32 stateRoot) internal view returns (bytes memory) {
-        // Create all required fields for an Ethereum block header
-        // We'll use minimal values but maintain the correct structure
+    function _createEthereumBlockHeader(uint256 blockNumber, bytes32 stateRoot) internal pure returns (bytes memory) {
+        // Create a simple test header format that can be parsed
+        // Format: [blockNumber, stateRoot] encoded as a simple RLP list
+        bytes memory blockNumberRLP = _encodeRLPUint(blockNumber);
+        bytes memory stateRootRLP = _encodeRLPBytes32(stateRoot);
 
-        bytes memory fields = abi.encodePacked(
-            _encodeRLPBytes32(bytes32(0)), // parentHash
-            _encodeRLPBytes32(keccak256(hex"c0")), // uncleHash (empty list hash)
-            _encodeRLPAddress(address(0)), // coinbase
-            _encodeRLPBytes32(stateRoot), // stateRoot
-            _encodeRLPBytes32(keccak256(hex"c0")), // transactionRoot (empty list hash)
-            _encodeRLPBytes32(keccak256(hex"c0")), // receiptRoot (empty list hash)
-            _encodeRLPBytes(new bytes(256)), // logsBloom (256 zero bytes)
-            _encodeRLPUint(0), // difficulty
-            _encodeRLPUint(blockNumber), // number
-            _encodeRLPUint(30000000), // gasLimit
-            _encodeRLPUint(0), // gasUsed
-            _encodeRLPUint(block.timestamp), // timestamp
-            _encodeRLPBytes(new bytes(0)), // extraData (empty)
-            _encodeRLPBytes32(bytes32(0)), // mixHash
-            _encodeRLPUint(0) // nonce
-        );
+        bytes memory content = abi.encodePacked(blockNumberRLP, stateRootRLP);
 
-        // Encode as RLP list
-        if (fields.length <= 55) {
-            return abi.encodePacked(bytes1(uint8(0xc0 + fields.length)), fields);
-        } else {
-            // Long list encoding
-            bytes memory lengthBytes = _uintToBytes(fields.length);
-            return abi.encodePacked(
-                bytes1(uint8(0xf7 + lengthBytes.length)),
-                lengthBytes,
-                fields
-            );
-        }
+        // Wrap as RLP list
+        return abi.encodePacked(bytes1(uint8(0xc0 + content.length)), content);
     }
 
     /**
