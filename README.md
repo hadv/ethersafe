@@ -16,31 +16,31 @@ EtherSafe enables EOA owners to set up inheritance that automatically transfers 
 
 ```mermaid
 graph TD
-    A[👤 EOA Owner] --> B[⚙️ Configure Inheritance]
-    B --> C[📝 Specify Inheritor & Period]
-    C --> D[🔗 Set EIP-7702 Delegation]
-    D --> E[✅ Setup Complete]
+    A[👤 EOA Owner] --> B[⚙️ Configure<br/>Inheritance]
+    B --> C[📝 Set Inheritor<br/>& Period]
+    C --> D[🔗 EIP-7702<br/>Delegation]
+    D --> E[✅ Setup<br/>Complete]
 
-    E --> F[📱 Normal EOA Operations]
-    F --> G{🔍 Account Active?}
+    E --> F[📱 Normal<br/>Operations]
+    F --> G{🔍 Active?}
     G -->|Yes| F
-    G -->|No| H[⏰ Mark Inactivity Start]
+    G -->|No| H[⏰ Mark<br/>Inactivity]
 
-    H --> I[🔐 Cryptographic State Verification]
-    I --> J[⏳ Inactivity Period Countdown]
-    J --> K{⏱️ Period Expired?}
+    H --> I[🔐 State<br/>Verification]
+    I --> J[⏳ Countdown<br/>Period]
+    J --> K{⏱️ Expired?}
     K -->|No| L[⏳ Wait...]
     L --> K
-    K -->|Yes| M[👥 Inheritor Claims]
+    K -->|Yes| M[👥 Inheritor<br/>Claims]
 
-    M --> N[🔍 Verify Account Still Inactive]
-    N --> O{✅ Nonce Unchanged?}
-    O -->|No| P[❌ Claim Rejected]
-    O -->|Yes| Q[🎉 Inheritance Granted]
+    M --> N[🔍 Verify Still<br/>Inactive]
+    N --> O{✅ Nonce<br/>Unchanged?}
+    O -->|No| P[❌ Rejected]
+    O -->|Yes| Q[🎉 Inheritance<br/>Granted]
 
-    Q --> R[🎮 Inheritor Controls EOA]
-    R --> S[💰 Access All Assets]
-    S --> T[🏦 ETH, Tokens, NFTs, DeFi]
+    Q --> R[🎮 Control<br/>EOA]
+    R --> S[💰 Access<br/>Assets]
+    S --> T[🏦 ETH, Tokens<br/>NFTs, DeFi]
 
     style A fill:#e1f5fe
     style Q fill:#c8e6c9
@@ -55,6 +55,8 @@ graph TD
 - 🛡️ **Griefing Resistant**: Attackers can't block inheritance by sending ETH
 - 🔐 **Cryptographic Proofs**: State verification uses Merkle proofs
 - ⛓️ **On-Chain**: No reliance on oracles or centralized services
+
+> 💡 **Tip**: The diagram above is interactive on GitHub - you can click and zoom for better viewing!
 
 ## ✨ Key Features
 
