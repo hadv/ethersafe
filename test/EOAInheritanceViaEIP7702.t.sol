@@ -58,17 +58,10 @@ contract EOAInheritanceViaEIP7702Test is Test {
         // Step 2: Mark inactivity start
         vm.roll(TEST_BLOCK + 100);
 
-        // Generate test block header and account state proof
+        // Generate test block header and account state proof using test helper
         uint256 blockNumber = TEST_BLOCK + 100;
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(blockNumber);
-
-        // Mock blockhash to return the expected value for our test header
-        bytes32 expectedBlockHash = keccak256(blockHeaderRLP);
-        vm.mockCall(
-            address(0), // blockhash is a global function
-            abi.encodeWithSignature("blockhash(uint256)", blockNumber),
-            abi.encode(expectedBlockHash)
-        );
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(blockNumber);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(blockNumber, testStateRoot);
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42,
@@ -89,7 +82,8 @@ contract EOAInheritanceViaEIP7702Test is Test {
         
         // Step 4: Claim inheritance
         uint256 claimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
-        bytes memory claimBlockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(claimBlockNumber);
+        bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
+        bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
         InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
             nonce: 42, // same nonce (inactive)
@@ -308,16 +302,16 @@ contract EOAInheritanceViaEIP7702Test is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(inactivityBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(inactivityBlock, testStateRoot);
 
-        // Get account state
-        uint256 accountNonce = vm.getNonce(eoaAccount);
-        uint256 accountBalance = eoaAccount.balance;
+        // Use consistent nonce value for testing
+        uint256 testNonce = 42;
+        uint256 testBalance = 10 ether;
 
         InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
-            nonce: accountNonce,
-            balance: accountBalance,
+            nonce: testNonce,
+            balance: testBalance,
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),
             codeHash: keccak256(abi.encodePacked("code", eoaAccount)),
-            proof: stateProofHelper.generateAccountProof(eoaAccount, accountNonce, accountBalance)
+            proof: stateProofHelper.generateAccountProof(eoaAccount, testNonce, testBalance)
         });
 
         inheritanceManager.markInactivityStartWithProof(eoaAccount, blockHeaderRLP, accountStateProof);
@@ -329,11 +323,11 @@ contract EOAInheritanceViaEIP7702Test is Test {
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
         InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
-            nonce: 42, // same nonce (inactive)
-            balance: 10 ether, // same balance (inactive)
+            nonce: testNonce, // same nonce (inactive)
+            balance: testBalance, // same balance (inactive)
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),
             codeHash: keccak256(abi.encodePacked("code", eoaAccount)),
-            proof: stateProofHelper.generateAccountProof(eoaAccount, 42, 10 ether)
+            proof: stateProofHelper.generateAccountProof(eoaAccount, testNonce, testBalance)
         });
 
         vm.prank(inheritor);

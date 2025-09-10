@@ -233,7 +233,7 @@ contract InheritanceManagerTest is Test {
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
 
         // Mark inactivity directly
-        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42);
+        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42, 5 ether);
 
         // Move forward in time
         vm.roll(1000 + INACTIVITY_PERIOD + 1);
@@ -284,7 +284,7 @@ contract InheritanceManagerTest is Test {
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
 
         // Mark inactivity
-        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42);
+        inheritanceManager.markInactivityStartDirect(accountOwner, 1000, 42, 5 ether);
 
         // Move forward in time
         vm.roll(1000 + INACTIVITY_PERIOD + 1);
