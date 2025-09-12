@@ -31,15 +31,45 @@ contract StateProofHelper {
      * This creates a minimal structure that can be parsed by the test helper
      */
     function _createEthereumBlockHeader(uint256 blockNumber, bytes32 stateRoot) internal pure returns (bytes memory) {
-        // Create a simple test header format that can be parsed
-        // Format: [blockNumber, stateRoot] encoded as a simple RLP list
-        bytes memory blockNumberRLP = _encodeRLPUint(blockNumber);
-        bytes memory stateRootRLP = _encodeRLPBytes32(stateRoot);
+        // Create a proper Ethereum block header with correct field positions
+        // Split into parts to avoid stack too deep error
 
-        bytes memory content = abi.encodePacked(blockNumberRLP, stateRootRLP);
+        bytes memory part1 = _createHeaderPart1(stateRoot);
+        bytes memory part2 = _createHeaderPart2(blockNumber);
 
-        // Wrap as RLP list
-        return abi.encodePacked(bytes1(uint8(0xc0 + content.length)), content);
+        bytes memory content = abi.encodePacked(part1, part2);
+        return _encodeRLPList(content);
+    }
+
+    function _createHeaderPart1(bytes32 stateRoot) internal pure returns (bytes memory) {
+        bytes32 dummyHash = keccak256("dummy");
+        address dummyAddress = address(0x1234567890123456789012345678901234567890);
+        bytes memory dummyBytes = new bytes(256); // 256 bytes for logsBloom
+
+        return abi.encodePacked(
+            _encodeRLPBytes32(dummyHash),        // 0: parentHash
+            _encodeRLPBytes32(dummyHash),        // 1: ommersHash
+            _encodeRLPAddress(dummyAddress),     // 2: beneficiary
+            _encodeRLPBytes32(stateRoot),        // 3: stateRoot (CORRECT POSITION)
+            _encodeRLPBytes32(dummyHash),        // 4: transactionsRoot
+            _encodeRLPBytes32(dummyHash),        // 5: receiptsRoot
+            _encodeRLPBytes(dummyBytes),         // 6: logsBloom
+            _encodeRLPUint(0)                    // 7: difficulty
+        );
+    }
+
+    function _createHeaderPart2(uint256 blockNumber) internal pure returns (bytes memory) {
+        bytes32 dummyHash = keccak256("dummy");
+
+        return abi.encodePacked(
+            _encodeRLPUint(blockNumber),         // 8: number (CORRECT POSITION)
+            _encodeRLPUint(0),                   // 9: gasLimit
+            _encodeRLPUint(0),                   // 10: gasUsed
+            _encodeRLPUint(0),                   // 11: timestamp
+            _encodeRLPBytes(new bytes(0)),       // 12: extraData
+            _encodeRLPBytes32(dummyHash),        // 13: mixHash
+            _encodeRLPUint(0)                    // 14: nonce
+        );
     }
 
     /**
@@ -300,20 +330,23 @@ contract StateProofHelper {
         address account,
         InheritanceManager.AccountStateProof memory accountState
     ) internal pure returns (bytes32) {
-        // Encode the account state according to Ethereum's RLP encoding
-        bytes memory accountRLP = abi.encodePacked(
+        // Encode the account state according to Ethereum's RLP encoding as a proper RLP list
+        bytes memory content = abi.encodePacked(
             _encodeRLPUint(accountState.nonce),
             _encodeRLPUint(accountState.balance),
             _encodeRLPBytes32(accountState.storageHash),
             _encodeRLPBytes32(accountState.codeHash)
         );
-        
+
+        // Wrap as RLP list
+        bytes memory accountRLP = _encodeRLPList(content);
+
         // Create the account leaf hash
         bytes32 accountLeaf = keccak256(accountRLP);
-        
+
         // Create the account key (address hash)
         bytes32 accountKey = keccak256(abi.encodePacked(account));
-        
+
         // The final leaf is the hash of key + value
         return keccak256(abi.encodePacked(accountKey, accountLeaf));
     }

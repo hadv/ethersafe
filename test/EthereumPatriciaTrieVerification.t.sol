@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
 import "../src/libraries/EthereumStateVerification.sol";
+import "./helpers/InheritanceManagerTestHelper.sol";
 import "./helpers/StateProofHelper.sol";
 import "./helpers/EthereumPatriciaTrieHelper.sol";
 
@@ -12,16 +13,16 @@ import "./helpers/EthereumPatriciaTrieHelper.sol";
  * @dev Test suite for Ethereum Patricia Trie verification using Polytope Labs library
  */
 contract EthereumPatriciaTrieVerificationTest is Test {
-    InheritanceManager public inheritanceManager;
+    InheritanceManagerTestHelper public inheritanceManager;
     StateProofHelper public stateProofHelper;
     EthereumPatriciaTrieHelper public patriciaHelper;
-    
+
     address public testAccount = address(0x123);
     address public inheritor = address(0x456);
     uint256 public constant INACTIVITY_PERIOD = 100;
 
     function setUp() public {
-        inheritanceManager = new InheritanceManager();
+        inheritanceManager = new InheritanceManagerTestHelper();
         stateProofHelper = new StateProofHelper();
         patriciaHelper = new EthereumPatriciaTrieHelper();
     }
@@ -220,26 +221,18 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         vm.prank(testAccount);
         inheritanceManager.configureInheritance(testAccount, inheritor, INACTIVITY_PERIOD);
 
-        // For now, use binary Merkle proof for the inheritance flow since it works
-        // In production, this would use actual eth_getProof data
+        // Use the same pattern as working InheritanceManager tests
+        uint256 testBlock = 1000;
+        bytes32 testStateRoot = inheritanceManager.createTestStateRoot(testBlock);
+        bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(testBlock, testStateRoot);
+
         InheritanceManager.AccountStateProof memory targetState = InheritanceManager.AccountStateProof({
             nonce: 100,
             balance: 1 ether,
-            storageHash: keccak256("storage"),
-            codeHash: keccak256("code"),
-            proof: new bytes32[](0)
+            storageHash: keccak256(abi.encodePacked("storage", testAccount)),
+            codeHash: keccak256(abi.encodePacked("code", testAccount)),
+            proof: stateProofHelper.generateAccountProof(testAccount, 100, 1 ether)
         });
-
-        (bytes32 stateRoot, bytes32[] memory proof) = stateProofHelper.generateSingleStateProof(
-            testAccount,
-            targetState,
-            new address[](0),
-            new InheritanceManager.AccountStateProof[](0)
-        );
-        targetState.proof = proof;
-
-        // Generate block header RLP
-        bytes memory blockHeaderRLP = stateProofHelper.generateBlockHeaderRLP(1000);
         
         // This should work with the current binary Merkle implementation
         // TODO: Replace with Patricia Trie when we have proper proof generation

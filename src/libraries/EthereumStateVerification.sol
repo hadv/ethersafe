@@ -258,6 +258,12 @@ library StateVerifier {
         // The final leaf is the hash of key + value
         bytes32 leafHash = keccak256(abi.encodePacked(accountKey, accountLeaf));
 
+        // Handle single-leaf tree case (empty proof)
+        if (accountStateProof.proof.length == 0) {
+            // For single-leaf tree, the root should equal the leaf
+            return stateRoot == leafHash;
+        }
+
         // Verify the Merkle proof against the state root using gas-optimized Solady library
         return MerkleProofLib.verify(accountStateProof.proof, stateRoot, leafHash);
     }
