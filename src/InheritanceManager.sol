@@ -108,10 +108,7 @@ contract InheritanceManager {
     mapping(address => bool) public inheritanceClaimed;
     mapping(address => address) public authorizedSigners;
 
-    // Removed configuration flag - now using Polytope Labs verification as the single method
 
-    // No asset registration needed!
-    // With EIP-7702 delegation, inheritor gets access to ALL assets automatically
     
     // --- Events ---
     
@@ -142,7 +139,7 @@ contract InheritanceManager {
      * @param accountStateProof The account state and Merkle proof
      * @return isValid Whether the proof is valid
      */
-    // Account state verification functions removed - use StateVerifier library directly
+
 
     /**
      * @dev Extract and verify state root from RLP-encoded block header
@@ -166,10 +163,7 @@ contract InheritanceManager {
     function extractStateRootFromHeader(
         bytes calldata blockHeaderRLP
     ) public view returns (uint256 blockNumber, bytes32 stateRoot) {
-        // Extract block number from RLP (simplified for now)
-        blockNumber = _decodeBlockNumberFromRLP(blockHeaderRLP);
-
-        // Use library for verification and state root extraction
+        blockNumber = StateVerifier._extractBlockNumberFromRLP(blockHeaderRLP);
         StateVerifier.BlockHeader memory header = StateVerifier.verifyAndDecodeBlockHeader(
             blockNumber,
             blockHeaderRLP
@@ -178,15 +172,7 @@ contract InheritanceManager {
         stateRoot = header.stateRoot;
     }
 
-    /**
-     * @dev Simplified block number extraction from RLP header
-     * @param blockHeaderRLP The RLP-encoded block header
-     * @return blockNumber The extracted block number
-     */
-    function _decodeBlockNumberFromRLP(bytes calldata blockHeaderRLP) internal pure returns (uint256 blockNumber) {
-        // Use the battle-tested StateVerifier library for RLP decoding
-        return StateVerifier._extractBlockNumberFromRLP(blockHeaderRLP);
-    }
+
 
     /**
      * @notice Verify block hash is valid and accessible
@@ -198,21 +184,15 @@ contract InheritanceManager {
         uint256 blockNumber,
         bytes32 providedBlockHash
     ) public view returns (bool isValid) {
-        // For current block, we can't get blockhash
         if (blockNumber >= block.number) {
             return false;
         }
 
-        // Get the actual block hash
         bytes32 actualBlockHash = blockhash(blockNumber);
 
-        // For blocks older than 256 blocks, blockhash returns 0
         if (actualBlockHash == bytes32(0)) {
-            // Block too old - cannot verify
             return false;
         }
-
-        // Verify the provided block hash matches the actual block hash
         return actualBlockHash == providedBlockHash;
     }
 
@@ -228,13 +208,8 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata accountStateProof
     ) external {
-        // Extract data from block header
         (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = _extractInactivityMarkingData(blockHeaderRLP);
-
-        // Validate the extracted data
         _validateInactivityMarkingData(blockNumber, blockHash);
-
-        // Process the inactivity marking with validated data
         _markInactivityStartWithProof(account, blockNumber, blockHash, stateRoot, accountStateProof);
     }
 
@@ -250,13 +225,8 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata currentAccountStateProof
     ) external {
-        // Extract data from block header
         (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = _extractInheritanceClaimData(blockHeaderRLP);
-
-        // Validate the extracted data
         _validateInheritanceClaimData(currentBlock, currentBlockHash);
-
-        // Process the inheritance claim with validated data
         _claimInheritanceWithProof(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof);
     }
 
@@ -271,13 +241,8 @@ contract InheritanceManager {
         address inheritor,
         uint256 inactivityPeriod
     ) external {
-        // Validate the configuration parameters
         _validateInheritanceConfig(account, inheritor, inactivityPeriod);
-
-        // Prepare the configuration data
         InheritanceConfig memory config = _prepareInheritanceConfig(account, inheritor, inactivityPeriod);
-
-        // Store the configuration
         inheritanceConfigs[account] = config;
 
         emit InheritanceConfigured(account, inheritor, inactivityPeriod);
@@ -378,10 +343,7 @@ contract InheritanceManager {
     function _extractBlockDataFromHeader(
         bytes calldata blockHeaderRLP
     ) internal pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
-        // Extract block number and state root from RLP
         (blockNumber, stateRoot) = _decodeBlockNumberAndStateRoot(blockHeaderRLP);
-
-        // Compute the block header hash
         blockHash = keccak256(blockHeaderRLP);
     }
 
@@ -397,11 +359,8 @@ contract InheritanceManager {
         uint256 blockNumber,
         bytes32 blockHash
     ) internal view {
-        // Get the expected block hash from Solidity's blockhash()
         bytes32 expectedBlockHash = blockhash(blockNumber);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
-
-        // Verify the block header hash matches the on-chain block hash
         require(blockHash == expectedBlockHash, "Block header hash mismatch");
     }
 
@@ -422,21 +381,12 @@ contract InheritanceManager {
     function _decodeBlockNumberAndStateRoot(
         bytes calldata rlpData
     ) internal pure returns (uint256 blockNumber, bytes32 stateRoot) {
-        // RLP decoding for Ethereum block headers
         uint256 offset = 0;
-
-        // Skip the list prefix
         (offset, ) = _decodeRLPListPrefix(rlpData, offset);
 
-        // Extract fields in order
-        // Field 0: parentHash (32 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-        // Field 1: uncleHash (32 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-        // Field 2: coinbase (20 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-
-        // Field 3: stateRoot (32 bytes) - extract this
         uint256 stateRootLength;
         (offset, stateRootLength) = _decodeRLPItemPrefix(rlpData, offset);
         require(stateRootLength == 32, "Invalid state root length");
@@ -446,28 +396,22 @@ contract InheritanceManager {
         }
         offset += stateRootLength;
 
-        // Field 4: transactionRoot (32 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-        // Field 5: receiptRoot (32 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-        // Field 6: logsBloom (256 bytes) - skip
         offset = _skipRLPItem(rlpData, offset);
-        // Field 7: difficulty (variable length) - skip
         offset = _skipRLPItem(rlpData, offset);
-
-        // Field 8: number (variable length uint256) - extract this
         uint256 numberLength;
         (offset, numberLength) = _decodeRLPItemPrefix(rlpData, offset);
         require(numberLength <= 32, "Invalid block number length");
 
-        // Extract block number (big-endian)
+
         blockNumber = 0;
         for (uint256 i = 0; i < numberLength; i++) {
             blockNumber = (blockNumber << 8) | uint8(rlpData[offset + i]);
         }
     }
 
-    // Custom RLP encoding functions removed - now using gas-optimized Solady LibRLP
+
 
     /**
      * @dev Verify a signature for authorization (supports both EOA and contract signatures)
@@ -513,11 +457,9 @@ contract InheritanceManager {
         uint8 prefix = uint8(data[offset]);
 
         if (prefix <= 0xf7) {
-            // Short list (0-55 bytes)
             length = prefix - 0xc0;
             newOffset = offset + 1;
         } else {
-            // Long list (>55 bytes)
             uint256 lengthOfLength = prefix - 0xf7;
             require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long list");
 
@@ -541,15 +483,12 @@ contract InheritanceManager {
         uint8 prefix = uint8(data[offset]);
 
         if (prefix <= 0x7f) {
-            // Single byte
             length = 1;
             newOffset = offset;
         } else if (prefix <= 0xb7) {
-            // Short string (0-55 bytes)
             length = prefix - 0x80;
             newOffset = offset + 1;
         } else {
-            // Long string (>55 bytes)
             uint256 lengthOfLength = prefix - 0xb7;
             require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long string");
 
@@ -624,7 +563,7 @@ contract InheritanceManager {
     ) internal view {
         _validateBlockHeader(currentBlock, currentBlockHash);
 
-        // Additional validation specific to inheritance claiming
+
         require(currentBlockHash != bytes32(0), "Block hash not available");
     }
 
@@ -658,7 +597,7 @@ contract InheritanceManager {
         address inheritor,
         uint256 inactivityPeriod
     ) internal view {
-        // Verify caller is authorized (account owner or authorized signer)
+
         if (msg.sender != account && authorizedSigners[account] != msg.sender) {
             revert UnauthorizedCaller();
         }
@@ -704,12 +643,9 @@ contract InheritanceManager {
             revert InheritanceNotConfigured();
         }
 
-        // Verify block hash is valid and accessible
         if (!verifyBlockHash(blockNumber, blockHash)) {
             revert InvalidBlockHash();
         }
-
-        // Verify the account state proof against the verified state root using library
         StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
             nonce: accountStateProof.nonce,
             balance: accountStateProof.balance,
@@ -738,13 +674,8 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory accountStateProof
     ) internal {
-        // Extract inheritance configuration data
         InheritanceConfig memory config = _extractInactivityStartData(account);
-
-        // Validate all the data
         _validateInactivityStartData(account, blockNumber, blockHash, stateRoot, accountStateProof, config);
-
-        // Store the inactivity record
         inactivityRecords[account] = InactivityRecord({
             startBlock: blockNumber,
             startNonce: accountStateProof.nonce,
@@ -804,7 +735,6 @@ contract InheritanceManager {
             revert InactivityNotMarked();
         }
 
-        // Check if enough time has passed
         uint256 requiredBlock = record.startBlock + config.inactivityPeriod;
         if (currentBlock < requiredBlock) {
             revert InactivityPeriodNotMetDetailed(
@@ -814,12 +744,9 @@ contract InheritanceManager {
             );
         }
 
-        // Verify current block hash is valid
         if (!verifyBlockHash(currentBlock, currentBlockHash)) {
             revert InvalidBlockHash();
         }
-
-        // Verify the current account state proof against the verified state root using library
         StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
             nonce: currentAccountStateProof.nonce,
             balance: currentAccountStateProof.balance,
@@ -855,25 +782,11 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory currentAccountStateProof
     ) internal {
-        // Extract inheritance and inactivity data
         (InheritanceConfig memory config, InactivityRecord memory record) = _extractInheritanceClaimingData(account);
-
-        // Validate all the data
         _validateInheritanceClaimingData(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof, config, record);
-
-        // Mark inheritance as claimed
         inheritanceClaimed[account] = true;
 
-        // Transfer control to inheritor
         authorizedSigners[account] = config.inheritor;
-
         emit InheritanceClaimed(account, config.inheritor);
-
-        // No asset transfer needed!
-        // With EIP-7702 delegation, inheritor gets direct control of the EOA account
     }
-    
-
-    
-
 }
