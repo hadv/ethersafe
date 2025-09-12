@@ -5,3 +5,9 @@
 	path = lib/account-abstraction
 	url = https://github.com/Zergity/account-abstraction
 	branch = bare
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady
+[submodule "lib/solidity-merkle-trees"]
+	path = lib/solidity-merkle-trees
+	url = https://github.com/polytope-labs/solidity-merkle-trees

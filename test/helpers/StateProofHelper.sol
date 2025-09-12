@@ -2,13 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "../../src/InheritanceManager.sol";
+import "solady/utils/MerkleProofLib.sol";
 
 /**
  * @title StateProofHelper
  * @dev Helper contract for generating real state proofs in tests
  */
 contract StateProofHelper {
-    using MerkleProof for bytes32[];
+    // Note: MerkleProofLib is a library with static functions, no 'using' directive needed
 
     /**
      * @dev Generate mock block header for testing
