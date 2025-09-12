@@ -105,7 +105,7 @@ contract InheritanceManager {
     error InvalidStateProof();
     error InvalidBlockHash();
 
-    // --- State Proof Verification ---
+    // --- External/Public Functions ---
 
     /**
      * @notice Verify account state using Merkle proof against state root
@@ -149,10 +149,9 @@ contract InheritanceManager {
      * @return stateRoot The extracted state root from the header
      *
      * This function:
-     * 1. Decodes the RLP header to extract block number and state root
-     * 2. Gets the expected block hash using blockhash(blockNumber)
-     * 3. Verifies the block header hash matches the on-chain block hash
-     * 4. Returns both the block number and verified state root
+     * 1. Extracts block data from RLP header
+     * 2. Validates the block header against on-chain block hash
+     * 3. Returns both the block number and verified state root
      *
      * SECURITY: This is cryptographically secure because:
      * - Block number is extracted from the header itself (trustless)
@@ -165,16 +164,229 @@ contract InheritanceManager {
     function extractStateRootFromHeader(
         bytes calldata blockHeaderRLP
     ) public view returns (uint256 blockNumber, bytes32 stateRoot) {
-        // First extract block number and state root from RLP
+        // Extract block data from header
+        bytes32 blockHash;
+        (blockNumber, stateRoot, blockHash) = _extractBlockDataFromHeader(blockHeaderRLP);
+
+        // Validate the extracted block data
+        _validateBlockHeader(blockNumber, blockHash);
+    }
+
+    /**
+     * @notice Verify block hash is valid and accessible
+     * @param blockNumber The block number to verify
+     * @param providedBlockHash The block hash provided
+     * @return isValid Whether the block hash is valid
+     */
+    function verifyBlockHash(
+        uint256 blockNumber,
+        bytes32 providedBlockHash
+    ) public view returns (bool isValid) {
+        // For current block, we can't get blockhash
+        if (blockNumber >= block.number) {
+            return false;
+        }
+
+        // Get the actual block hash
+        bytes32 actualBlockHash = blockhash(blockNumber);
+
+        // For blocks older than 256 blocks, blockhash returns 0
+        if (actualBlockHash == bytes32(0)) {
+            // Block too old - cannot verify
+            return false;
+        }
+
+        // Verify the provided block hash matches the actual block hash
+        return actualBlockHash == providedBlockHash;
+    }
+
+    /**
+     * @notice Mark inactivity with full state proof verification (public version)
+     * @dev This is the production-ready function with complete cryptographic verification
+     * @param account The account to mark as inactive
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @param accountStateProof Complete account state proof including Merkle proof
+     */
+    function markInactivityStartWithProof(
+        address account,
+        bytes calldata blockHeaderRLP,
+        AccountStateProof calldata accountStateProof
+    ) external {
+        // Extract data from block header
+        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = _extractInactivityMarkingData(blockHeaderRLP);
+
+        // Validate the extracted data
+        _validateInactivityMarkingData(blockNumber, blockHash);
+
+        // Process the inactivity marking with validated data
+        _markInactivityStartWithProof(account, blockNumber, blockHash, stateRoot, accountStateProof);
+    }
+
+    /**
+     * @notice Claim inheritance with full state proof verification (public version)
+     * @dev This is the production-ready function with complete cryptographic verification
+     * @param account The account to claim inheritance for
+     * @param blockHeaderRLP The complete RLP-encoded block header for current state verification
+     * @param currentAccountStateProof Complete current account state proof
+     */
+    function claimInheritanceWithProof(
+        address account,
+        bytes calldata blockHeaderRLP,
+        AccountStateProof calldata currentAccountStateProof
+    ) external {
+        // Extract data from block header
+        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = _extractInheritanceClaimData(blockHeaderRLP);
+
+        // Validate the extracted data
+        _validateInheritanceClaimData(currentBlock, currentBlockHash);
+
+        // Process the inheritance claim with validated data
+        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof);
+    }
+
+    /**
+     * @notice Configure inheritance for an account
+     * @param account The account to configure inheritance for
+     * @param inheritor The address that will inherit the account
+     * @param inactivityPeriod How long the account must be inactive (in blocks)
+     */
+    function configureInheritance(
+        address account,
+        address inheritor,
+        uint256 inactivityPeriod
+    ) external {
+        // Validate the configuration parameters
+        _validateInheritanceConfig(account, inheritor, inactivityPeriod);
+
+        // Prepare the configuration data
+        InheritanceConfig memory config = _prepareInheritanceConfig(account, inheritor, inactivityPeriod);
+
+        // Store the configuration
+        inheritanceConfigs[account] = config;
+
+        emit InheritanceConfigured(account, inheritor, inactivityPeriod);
+    }
+
+    /**
+     * @notice Revoke inheritance configuration
+     * @param account The account to revoke inheritance for
+     */
+    function revokeInheritance(address account) external {
+        if (msg.sender != account && authorizedSigners[account] != msg.sender) {
+            revert UnauthorizedCaller();
+        }
+
+        delete inheritanceConfigs[account];
+        delete inactivityRecords[account];
+        delete inheritanceClaimed[account];
+    }
+
+    /**
+     * @notice Authorize a signer to manage inheritance for this account
+     * @param signer The address to authorize
+     */
+    function authorizeSigner(address signer) external {
+        authorizedSigners[msg.sender] = signer;
+    }
+
+    /**
+     * @notice Check if inheritance can be claimed for an account
+     */
+    function canClaimInheritance(address account) external view returns (
+        bool canClaim,
+        uint256 blocksRemaining,
+        address inheritor,
+        bool isConfigured
+    ) {
+        InheritanceConfig memory config = inheritanceConfigs[account];
+        if (!config.isActive) {
+            return (false, 0, address(0), false);
+        }
+
+        InactivityRecord memory record = inactivityRecords[account];
+        if (!record.isMarked) {
+            return (false, 0, config.inheritor, true);
+        }
+
+        uint256 requiredBlock = record.startBlock + config.inactivityPeriod;
+        if (block.number >= requiredBlock) {
+            return (true, 0, config.inheritor, true);
+        } else {
+            return (false, requiredBlock - block.number, config.inheritor, true);
+        }
+    }
+
+    /**
+     * @notice Get inheritance configuration for an account
+     */
+    function getInheritanceConfig(address account) external view returns (
+        address inheritor,
+        uint256 inactivityPeriod,
+        bool isActive
+    ) {
+        InheritanceConfig memory config = inheritanceConfigs[account];
+        return (config.inheritor, config.inactivityPeriod, config.isActive);
+    }
+
+    /**
+     * @notice Check if inheritance has been claimed for an account
+     */
+    function isInheritanceClaimed(address account) external view returns (bool) {
+        return inheritanceClaimed[account];
+    }
+
+    /**
+     * @notice Get inactivity record for an account
+     */
+    function getInactivityRecord(address account) external view returns (
+        uint256 startBlock,
+        uint256 startNonce,
+        bool isMarked
+    ) {
+        InactivityRecord memory record = inactivityRecords[account];
+        return (record.startBlock, record.startNonce, record.isMarked);
+    }
+
+    // --- Internal/Private Functions ---
+
+    /**
+     * @dev Extract block data from RLP-encoded block header (pure extraction)
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @return blockNumber The block number extracted from the header
+     * @return stateRoot The extracted state root from the header
+     * @return blockHash The computed hash of the block header
+     *
+     * This function only extracts data without any validation.
+     * Use _validateBlockHeader() to validate the extracted data.
+     */
+    function _extractBlockDataFromHeader(
+        bytes calldata blockHeaderRLP
+    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
+        // Extract block number and state root from RLP
         (blockNumber, stateRoot) = _decodeBlockNumberAndStateRoot(blockHeaderRLP);
 
+        // Compute the block header hash
+        blockHash = keccak256(blockHeaderRLP);
+    }
+
+    /**
+     * @dev Validate block header data against on-chain block hash
+     * @param blockNumber The block number to validate
+     * @param blockHash The computed hash of the block header
+     *
+     * This function only performs validation without any data extraction.
+     * Use _extractBlockDataFromHeader() to extract data first.
+     */
+    function _validateBlockHeader(
+        uint256 blockNumber,
+        bytes32 blockHash
+    ) internal view {
         // Get the expected block hash from Solidity's blockhash()
         bytes32 expectedBlockHash = blockhash(blockNumber);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
 
         // Verify the block header hash matches the on-chain block hash
-        bytes32 actualBlockHash = keccak256(blockHeaderRLP);
-        require(actualBlockHash == expectedBlockHash, "Block header hash mismatch");
+        require(blockHash == expectedBlockHash, "Block header hash mismatch");
     }
 
     /**
@@ -352,144 +564,148 @@ contract InheritanceManager {
     }
 
     /**
-     * @notice Verify block hash is valid and accessible
-     * @param blockNumber The block number to verify
-     * @param providedBlockHash The block hash provided
-     * @return isValid Whether the block hash is valid
-     */
-    function verifyBlockHash(
-        uint256 blockNumber,
-        bytes32 providedBlockHash
-    ) public view returns (bool isValid) {
-        // For current block, we can't get blockhash
-        if (blockNumber >= block.number) {
-            return false;
-        }
-
-        // Get the actual block hash
-        bytes32 actualBlockHash = blockhash(blockNumber);
-
-        // For blocks older than 256 blocks, blockhash returns 0
-        if (actualBlockHash == bytes32(0)) {
-            // Block too old - cannot verify
-            return false;
-        }
-
-        // Verify the provided block hash matches the actual block hash
-        return actualBlockHash == providedBlockHash;
-    }
-
-
-
-
-    // --- Production State Proof Functions ---
-
-    /**
-     * @notice Mark inactivity with full state proof verification (public version)
-     * @dev This is the production-ready function with complete cryptographic verification
-     * @param account The account to mark as inactive
+     * @dev Extract and prepare data for marking inactivity start
      * @param blockHeaderRLP The complete RLP-encoded block header
-     * @param accountStateProof Complete account state proof including Merkle proof
+     * @return blockNumber The extracted block number
+     * @return stateRoot The extracted state root
+     * @return blockHash The computed block hash
      */
-    function markInactivityStartWithProof(
-        address account,
-        bytes calldata blockHeaderRLP,
-        AccountStateProof calldata accountStateProof
-    ) external {
-        // Extract block number and state root from header, verify against on-chain block hash
-        (uint256 blockNumber, bytes32 stateRoot) = extractStateRootFromHeader(blockHeaderRLP);
+    function _extractInactivityMarkingData(
+        bytes calldata blockHeaderRLP
+    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
+        return _extractBlockDataFromHeader(blockHeaderRLP);
+    }
 
-        // Get block hash for internal verification
-        bytes32 blockHash = blockhash(blockNumber);
+    /**
+     * @dev Validate data for marking inactivity start
+     * @param blockNumber The block number to validate
+     * @param blockHash The block hash to validate
+     */
+    function _validateInactivityMarkingData(
+        uint256 blockNumber,
+        bytes32 blockHash
+    ) internal view {
+        _validateBlockHeader(blockNumber, blockHash);
+
+        // Additional validation specific to inactivity marking
         require(blockHash != bytes32(0), "Block hash not available");
-
-        _markInactivityStartWithProof(account, blockNumber, blockHash, stateRoot, accountStateProof);
     }
 
     /**
-     * @notice Claim inheritance with full state proof verification (public version)
-     * @dev This is the production-ready function with complete cryptographic verification
-     * @param account The account to claim inheritance for
-     * @param blockHeaderRLP The complete RLP-encoded block header for current state verification
-     * @param currentAccountStateProof Complete current account state proof
+     * @dev Extract and prepare data for claiming inheritance
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @return currentBlock The extracted current block number
+     * @return stateRoot The extracted state root
+     * @return currentBlockHash The computed current block hash
      */
-    function claimInheritanceWithProof(
-        address account,
-        bytes calldata blockHeaderRLP,
-        AccountStateProof calldata currentAccountStateProof
-    ) external {
-        // Extract block number and state root from header, verify against on-chain block hash
-        (uint256 currentBlock, bytes32 stateRoot) = extractStateRootFromHeader(blockHeaderRLP);
-
-        // Get block hash for internal verification
-        bytes32 currentBlockHash = blockhash(currentBlock);
-        require(currentBlockHash != bytes32(0), "Block hash not available");
-
-        _claimInheritanceWithProof(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof);
+    function _extractInheritanceClaimData(
+        bytes calldata blockHeaderRLP
+    ) internal pure returns (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) {
+        return _extractBlockDataFromHeader(blockHeaderRLP);
     }
 
-    // --- Inheritance Configuration ---
-    
     /**
-     * @notice Configure inheritance for an account
+     * @dev Validate data for claiming inheritance
+     * @param currentBlock The current block number to validate
+     * @param currentBlockHash The current block hash to validate
+     */
+    function _validateInheritanceClaimData(
+        uint256 currentBlock,
+        bytes32 currentBlockHash
+    ) internal view {
+        _validateBlockHeader(currentBlock, currentBlockHash);
+
+        // Additional validation specific to inheritance claiming
+        require(currentBlockHash != bytes32(0), "Block hash not available");
+    }
+
+    /**
+     * @dev Prepare inheritance configuration data
      * @param account The account to configure inheritance for
      * @param inheritor The address that will inherit the account
      * @param inactivityPeriod How long the account must be inactive (in blocks)
+     * @return config The prepared inheritance configuration
      */
-    function configureInheritance(
+    function _prepareInheritanceConfig(
         address account,
         address inheritor,
         uint256 inactivityPeriod
-    ) external {
-        // Verify caller is authorized (account owner or authorized signer)
-        if (msg.sender != account && authorizedSigners[account] != msg.sender) {
-            revert UnauthorizedCaller();
-        }
-        
-        if (inheritor == address(0) || inheritor == account) {
-            revert InvalidInheritor();
-        }
-        
-        if (inactivityPeriod == 0) {
-            revert InvalidPeriod();
-        }
-        
-        inheritanceConfigs[account] = InheritanceConfig({
+    ) internal pure returns (InheritanceConfig memory config) {
+        config = InheritanceConfig({
             inheritor: inheritor,
             inactivityPeriod: inactivityPeriod,
             isActive: true
         });
-        
-        emit InheritanceConfigured(account, inheritor, inactivityPeriod);
     }
-    
+
     /**
-     * @notice Revoke inheritance configuration
-     * @param account The account to revoke inheritance for
+     * @dev Validate inheritance configuration parameters
+     * @param account The account to configure inheritance for
+     * @param inheritor The address that will inherit the account
+     * @param inactivityPeriod How long the account must be inactive (in blocks)
      */
-    function revokeInheritance(address account) external {
+    function _validateInheritanceConfig(
+        address account,
+        address inheritor,
+        uint256 inactivityPeriod
+    ) internal view {
+        // Verify caller is authorized (account owner or authorized signer)
         if (msg.sender != account && authorizedSigners[account] != msg.sender) {
             revert UnauthorizedCaller();
         }
-        
-        delete inheritanceConfigs[account];
-        delete inactivityRecords[account];
-        delete inheritanceClaimed[account];
+
+        if (inheritor == address(0) || inheritor == account) {
+            revert InvalidInheritor();
+        }
+
+        if (inactivityPeriod == 0) {
+            revert InvalidPeriod();
+        }
     }
     
     /**
-     * @notice Authorize a signer to manage inheritance for this account
-     * @param signer The address to authorize
+     * @dev Extract data for marking inactivity start
+     * @param account The account to mark as inactive
+     * @return config The inheritance configuration for the account
      */
-    function authorizeSigner(address signer) external {
-        authorizedSigners[msg.sender] = signer;
+    function _extractInactivityStartData(
+        address account
+    ) internal view returns (InheritanceConfig memory config) {
+        config = inheritanceConfigs[account];
     }
-    
-    // No registerAssets function needed!
-    // With EIP-7702 delegation, inheritor automatically gets access to ALL assets
-    
-    // --- Inactivity Tracking ---
-    
+
+    /**
+     * @dev Validate data for marking inactivity start
+     * @param account The account to mark as inactive
+     * @param blockNumber The block number to check state at
+     * @param blockHash The hash of the block at blockNumber
+     * @param stateRoot The state root for the specified block
+     * @param accountStateProof Complete account state proof including Merkle proof
+     * @param config The inheritance configuration for the account
+     */
+    function _validateInactivityStartData(
+        address account,
+        uint256 blockNumber,
+        bytes32 blockHash,
+        bytes32 stateRoot,
+        AccountStateProof memory accountStateProof,
+        InheritanceConfig memory config
+    ) internal view {
+        if (!config.isActive) {
+            revert InheritanceNotConfigured();
+        }
+
+        // Verify block hash is valid and accessible
+        if (!verifyBlockHash(blockNumber, blockHash)) {
+            revert InvalidBlockHash();
+        }
+
+        // Verify the account state proof against the verified state root
+        if (!verifyAccountState(account, stateRoot, accountStateProof)) {
+            revert InvalidStateProof();
+        }
+    }
+
     /**
      * @notice Mark the start of an inactivity period for an account (with state proof)
      * @param account The account to mark as inactive
@@ -505,24 +721,13 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory accountStateProof
     ) internal {
-        InheritanceConfig memory config = inheritanceConfigs[account];
-        if (!config.isActive) {
-            revert InheritanceNotConfigured();
-        }
+        // Extract inheritance configuration data
+        InheritanceConfig memory config = _extractInactivityStartData(account);
 
-        // Verify block hash is valid and accessible
-        if (!verifyBlockHash(blockNumber, blockHash)) {
-            revert InvalidBlockHash();
-        }
+        // Validate all the data
+        _validateInactivityStartData(account, blockNumber, blockHash, stateRoot, accountStateProof, config);
 
-        // The state root has already been verified through block header verification
-        // in extractStateRootFromHeader(), so we can trust it here
-
-        // Verify the account state proof against the verified state root
-        if (!verifyAccountState(account, stateRoot, accountStateProof)) {
-            revert InvalidStateProof();
-        }
-
+        // Store the inactivity record
         inactivityRecords[account] = InactivityRecord({
             startBlock: blockNumber,
             startNonce: accountStateProof.nonce,
@@ -534,6 +739,77 @@ contract InheritanceManager {
     
     // --- Inheritance Claiming ---
     
+    /**
+     * @dev Extract data for claiming inheritance
+     * @param account The account to claim inheritance for
+     * @return config The inheritance configuration for the account
+     * @return record The inactivity record for the account
+     */
+    function _extractInheritanceClaimingData(
+        address account
+    ) internal view returns (InheritanceConfig memory config, InactivityRecord memory record) {
+        config = inheritanceConfigs[account];
+        record = inactivityRecords[account];
+    }
+
+    /**
+     * @dev Validate data for claiming inheritance
+     * @param account The account to claim inheritance for
+     * @param currentBlock The current block to verify continued inactivity
+     * @param currentBlockHash The hash of the current block
+     * @param stateRoot The state root for the current block
+     * @param currentAccountStateProof Complete current account state proof
+     * @param config The inheritance configuration for the account
+     * @param record The inactivity record for the account
+     */
+    function _validateInheritanceClaimingData(
+        address account,
+        uint256 currentBlock,
+        bytes32 currentBlockHash,
+        bytes32 stateRoot,
+        AccountStateProof memory currentAccountStateProof,
+        InheritanceConfig memory config,
+        InactivityRecord memory record
+    ) internal view {
+        if (!config.isActive) {
+            revert InheritanceNotConfigured();
+        }
+
+        if (msg.sender != config.inheritor) {
+            revert UnauthorizedCaller();
+        }
+
+        if (inheritanceClaimed[account]) {
+            revert InheritanceAlreadyClaimed();
+        }
+
+        if (!record.isMarked) {
+            revert InactivityNotMarked();
+        }
+
+        // Check if enough time has passed
+        if (currentBlock < record.startBlock + config.inactivityPeriod) {
+            revert InactivityPeriodNotMet();
+        }
+
+        // Verify current block hash is valid
+        if (!verifyBlockHash(currentBlock, currentBlockHash)) {
+            revert InvalidBlockHash();
+        }
+
+        // Verify the current account state proof against the verified state root
+        if (!verifyAccountState(account, stateRoot, currentAccountStateProof)) {
+            revert InvalidStateProof();
+        }
+
+        // Verify account is still inactive (same nonce only)
+        // Note: We only check nonce because balance can change without account owner activity
+        // (e.g., receiving ETH transfers, mining rewards, airdrops, etc.)
+        if (currentAccountStateProof.nonce != record.startNonce) {
+            revert AccountStillActive();
+        }
+    }
+
     /**
      * @notice Claim inheritance of an inactive account (with state proof)
      * @param account The account to claim inheritance for
@@ -549,55 +825,18 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory currentAccountStateProof
     ) internal {
-        InheritanceConfig memory config = inheritanceConfigs[account];
-        if (!config.isActive) {
-            revert InheritanceNotConfigured();
-        }
+        // Extract inheritance and inactivity data
+        (InheritanceConfig memory config, InactivityRecord memory record) = _extractInheritanceClaimingData(account);
 
-        if (msg.sender != config.inheritor) {
-            revert UnauthorizedCaller();
-        }
-        
-        if (inheritanceClaimed[account]) {
-            revert InheritanceAlreadyClaimed();
-        }
-        
-        InactivityRecord memory record = inactivityRecords[account];
-        if (!record.isMarked) {
-            revert InactivityNotMarked();
-        }
-        
-        // Check if enough time has passed
-        if (currentBlock < record.startBlock + config.inactivityPeriod) {
-            revert InactivityPeriodNotMet();
-        }
+        // Validate all the data
+        _validateInheritanceClaimingData(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof, config, record);
 
-        // Verify current block hash is valid
-        if (!verifyBlockHash(currentBlock, currentBlockHash)) {
-            revert InvalidBlockHash();
-        }
-
-        // The state root has already been verified through block header verification
-        // in extractStateRootFromHeader(), so we can trust it here
-
-        // Verify the current account state proof against the verified state root
-        if (!verifyAccountState(account, stateRoot, currentAccountStateProof)) {
-            revert InvalidStateProof();
-        }
-
-        // Verify account is still inactive (same nonce only)
-        // Note: We only check nonce because balance can change without account owner activity
-        // (e.g., receiving ETH transfers, mining rewards, airdrops, etc.)
-        if (currentAccountStateProof.nonce != record.startNonce) {
-            revert AccountStillActive();
-        }
-        
         // Mark inheritance as claimed
         inheritanceClaimed[account] = true;
-        
+
         // Transfer control to inheritor
         authorizedSigners[account] = config.inheritor;
-        
+
         emit InheritanceClaimed(account, config.inheritor);
 
         // No asset transfer needed!
@@ -606,63 +845,5 @@ contract InheritanceManager {
     
 
     
-    // --- View Functions ---
-    
-    /**
-     * @notice Check if inheritance can be claimed for an account
-     */
-    function canClaimInheritance(address account) external view returns (
-        bool canClaim,
-        uint256 blocksRemaining,
-        address inheritor,
-        bool isConfigured
-    ) {
-        InheritanceConfig memory config = inheritanceConfigs[account];
-        if (!config.isActive) {
-            return (false, 0, address(0), false);
-        }
-        
-        InactivityRecord memory record = inactivityRecords[account];
-        if (!record.isMarked) {
-            return (false, 0, config.inheritor, true);
-        }
-        
-        uint256 requiredBlock = record.startBlock + config.inactivityPeriod;
-        if (block.number >= requiredBlock) {
-            return (true, 0, config.inheritor, true);
-        } else {
-            return (false, requiredBlock - block.number, config.inheritor, true);
-        }
-    }
-    
-    /**
-     * @notice Get inheritance configuration for an account
-     */
-    function getInheritanceConfig(address account) external view returns (
-        address inheritor,
-        uint256 inactivityPeriod,
-        bool isActive
-    ) {
-        InheritanceConfig memory config = inheritanceConfigs[account];
-        return (config.inheritor, config.inactivityPeriod, config.isActive);
-    }
-    
-    /**
-     * @notice Check if inheritance has been claimed for an account
-     */
-    function isInheritanceClaimed(address account) external view returns (bool) {
-        return inheritanceClaimed[account];
-    }
 
-    /**
-     * @notice Get inactivity record for an account
-     */
-    function getInactivityRecord(address account) external view returns (
-        uint256 startBlock,
-        uint256 startNonce,
-        bool isMarked
-    ) {
-        InactivityRecord memory record = inactivityRecords[account];
-        return (record.startBlock, record.startNonce, record.isMarked);
-    }
 }
