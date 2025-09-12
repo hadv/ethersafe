@@ -14,7 +14,7 @@ import "./InheritanceManager.sol";
  * Key features:
  * - Inherits from BareAccount for optimized execution logic
  * - Better gas efficiency through assembly-optimized calls
- * - Enhanced batch execution capabilities
+ * - Simplified single execution interface
  * - Proper return data handling
  */
 contract EIP7702InheritanceController is BareAccount {
