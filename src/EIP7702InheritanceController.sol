@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "../lib/account-abstraction/contracts/core/BareAccount.sol";
 import "./InheritanceManager.sol";
 
 /**
  * @title EIP7702InheritanceController
- * @dev Simple and clean EIP-7702 controller for inherited EOAs
- * 
+ * @dev Enhanced EIP-7702 controller using BareAccount library for inherited EOAs
+ *
  * This contract becomes the delegation target for inherited EOAs via EIP-7702.
  * After inheritance is claimed, the inheritor can control the EOA directly.
+ *
+ * Key features:
+ * - Inherits from BareAccount for optimized execution logic
+ * - Better gas efficiency through assembly-optimized calls
+ * - Enhanced batch execution capabilities
+ * - Proper return data handling
  */
-contract EIP7702InheritanceController {
+contract EIP7702InheritanceController is BareAccount {
     
     InheritanceManager public immutable inheritanceManager;
     
@@ -19,58 +26,19 @@ contract EIP7702InheritanceController {
     }
     
     /**
-     * @notice Execute any transaction from the inherited EOA
-     * @dev This is the only function needed - it can handle all transfers and interactions
-     * @param to Target address
-     * @param value ETH value to send
-     * @param data Call data
-     * 
-     * Examples:
-     * - Transfer ETH: execute(recipient, amount, "")
-     * - Transfer ERC20: execute(token, 0, abi.encodeWithSelector(IERC20.transfer.selector, recipient, amount))
-     * - Transfer ERC721: execute(nft, 0, abi.encodeWithSelector(IERC721.transferFrom.selector, from, to, tokenId))
-     * - Call any contract: execute(contract, value, callData)
+     * @dev Override authorization logic to check inheritance status
+     * This replaces the default "msg.sender == address(this)" check with inheritance verification
      */
-    function execute(address to, uint256 value, bytes calldata data) external payable returns (bytes memory) {
+    function _requireForExecute() internal view override {
         // Verify that inheritance has been claimed for this EOA
         require(inheritanceManager.isInheritanceClaimed(address(this)), "Inheritance not claimed");
-        
+
         // Verify that the caller is the inheritor
         (address inheritor,,) = inheritanceManager.getInheritanceConfig(address(this));
         require(msg.sender == inheritor, "Not the inheritor");
-        
-        // Execute the transaction from the EOA (address(this) is the EOA when delegated via EIP-7702)
-        (bool success, bytes memory result) = to.call{value: value}(data);
-        require(success, "Execution failed");
-        
-        return result;
     }
     
-    /**
-     * @notice Execute multiple transactions from the inherited EOA
-     * @dev Convenience function for batch operations
-     */
-    function executeBatch(
-        address[] calldata to,
-        uint256[] calldata values,
-        bytes[] calldata data
-    ) external payable returns (bytes[] memory results) {
-        require(inheritanceManager.isInheritanceClaimed(address(this)), "Inheritance not claimed");
-        
-        (address inheritor,,) = inheritanceManager.getInheritanceConfig(address(this));
-        require(msg.sender == inheritor, "Not the inheritor");
-        
-        require(to.length == values.length && values.length == data.length, "Length mismatch");
-        
-        results = new bytes[](to.length);
-        for (uint256 i = 0; i < to.length; i++) {
-            (bool success, bytes memory result) = to[i].call{value: values[i]}(data[i]);
-            require(success, "Batch execution failed");
-            results[i] = result;
-        }
-        
-        return results;
-    }
+
     
     /**
      * @notice Check if this EOA can be controlled by the caller
@@ -79,9 +47,24 @@ contract EIP7702InheritanceController {
         if (!inheritanceManager.isInheritanceClaimed(address(this))) {
             return false;
         }
-        
+
         (address inheritor,,) = inheritanceManager.getInheritanceConfig(address(this));
         return caller == inheritor;
+    }
+
+    /**
+     * @notice Get the current inheritor of this EOA
+     */
+    function getInheritor() external view returns (address) {
+        (address inheritor,,) = inheritanceManager.getInheritanceConfig(address(this));
+        return inheritor;
+    }
+
+    /**
+     * @notice Check if inheritance has been claimed for this EOA
+     */
+    function isInheritanceClaimed() external view returns (bool) {
+        return inheritanceManager.isInheritanceClaimed(address(this));
     }
     
     // Allow receiving ETH
