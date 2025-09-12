@@ -34,7 +34,7 @@ using StateVerifier for StateVerifier.AccountStateProof;
  * - Alternative: Polytope Labs Patricia Trie verification available via verifyAccountStateWithPatriciaTrie()
  * - Polytope Labs integration ready for production use with proper eth_getProof data
  * - Battle-tested libraries with extensive auditing and Web3 Foundation support
- * 
+ *
  * The idea is:
  * 1. Account owner uses existing MetaMask EIP-7702 delegator for normal operations
  * 2. Account owner configures inheritance through this separate InheritanceManager
@@ -42,19 +42,18 @@ using StateVerifier for StateVerifier.AccountStateProof;
  * 4. The existing EIP-7702 contract remains unchanged and unmodified
  */
 contract InheritanceManager {
-    
     // --- Inheritance Configuration ---
-    
+
     struct InheritanceConfig {
-        address inheritor;           // Who inherits the account
-        uint256 inactivityPeriod;   // How long account must be inactive
-        bool isActive;              // Whether inheritance is configured
+        address inheritor; // Who inherits the account
+        uint256 inactivityPeriod; // How long account must be inactive
+        bool isActive; // Whether inheritance is configured
     }
-    
+
     struct InactivityRecord {
-        uint256 startBlock;         // When inactivity period started
-        uint256 startNonce;         // Account nonce at start
-        bool isMarked;              // Whether inactivity has been marked
+        uint256 startBlock; // When inactivity period started
+        uint256 startNonce; // Account nonce at start
+        bool isMarked; // Whether inactivity has been marked
     }
 
     /**
@@ -62,32 +61,28 @@ contract InheritanceManager {
      * This represents the account state that needs to be proven
      */
     struct AccountStateProof {
-        uint256 nonce;              // Account nonce
-        uint256 balance;            // Account balance
-        bytes32 storageHash;        // Storage trie root hash
-        bytes32 codeHash;           // Code hash
-        bytes32[] proof;            // Merkle proof path
+        uint256 nonce; // Account nonce
+        uint256 balance; // Account balance
+        bytes32 storageHash; // Storage trie root hash
+        bytes32 codeHash; // Code hash
+        bytes32[] proof; // Merkle proof path
     }
 
-
-
     // --- State Variables ---
-    
+
     mapping(address => InheritanceConfig) public inheritanceConfigs;
     mapping(address => InactivityRecord) public inactivityRecords;
     mapping(address => bool) public inheritanceClaimed;
     mapping(address => address) public authorizedSigners;
 
-
-    
     // --- Events ---
-    
+
     event InheritanceConfigured(address indexed account, address indexed inheritor, uint256 inactivityPeriod);
     event InactivityMarked(address indexed account, uint256 startBlock, uint256 nonce, uint256 balance);
     event InheritanceClaimed(address indexed account, address indexed inheritor);
-    
+
     // --- Errors ---
-    
+
     error UnauthorizedCaller();
     error InheritanceNotConfigured();
     error InactivityNotMarked();
@@ -108,10 +103,7 @@ contract InheritanceManager {
      * @param providedBlockHash The block hash provided
      * @return isValid Whether the block hash is valid
      */
-    function verifyBlockHash(
-        uint256 blockNumber,
-        bytes32 providedBlockHash
-    ) public view returns (bool isValid) {
+    function verifyBlockHash(uint256 blockNumber, bytes32 providedBlockHash) public view returns (bool isValid) {
         if (blockNumber >= block.number) {
             return false;
         }
@@ -136,7 +128,8 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata accountStateProof
     ) external {
-        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
+        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) =
+            StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
 
         bytes32 expectedBlockHash = blockhash(blockNumber);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
@@ -156,7 +149,8 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata currentAccountStateProof
     ) external {
-        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
+        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) =
+            StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
 
         bytes32 expectedBlockHash = blockhash(currentBlock);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
@@ -170,17 +164,10 @@ contract InheritanceManager {
      * @param inheritor The address that will inherit the account
      * @param inactivityPeriod How long the account must be inactive (in blocks)
      */
-    function configureInheritance(
-        address account,
-        address inheritor,
-        uint256 inactivityPeriod
-    ) external {
+    function configureInheritance(address account, address inheritor, uint256 inactivityPeriod) external {
         _validateInheritanceConfig(account, inheritor, inactivityPeriod);
-        InheritanceConfig memory config = InheritanceConfig({
-            inheritor: inheritor,
-            inactivityPeriod: inactivityPeriod,
-            isActive: true
-        });
+        InheritanceConfig memory config =
+            InheritanceConfig({inheritor: inheritor, inactivityPeriod: inactivityPeriod, isActive: true});
         inheritanceConfigs[account] = config;
 
         emit InheritanceConfigured(account, inheritor, inactivityPeriod);
@@ -211,12 +198,11 @@ contract InheritanceManager {
     /**
      * @notice Check if inheritance can be claimed for an account
      */
-    function canClaimInheritance(address account) external view returns (
-        bool canClaim,
-        uint256 blocksRemaining,
-        address inheritor,
-        bool isConfigured
-    ) {
+    function canClaimInheritance(address account)
+        external
+        view
+        returns (bool canClaim, uint256 blocksRemaining, address inheritor, bool isConfigured)
+    {
         InheritanceConfig memory config = inheritanceConfigs[account];
         if (!config.isActive) {
             return (false, 0, address(0), false);
@@ -238,11 +224,11 @@ contract InheritanceManager {
     /**
      * @notice Get inheritance configuration for an account
      */
-    function getInheritanceConfig(address account) external view returns (
-        address inheritor,
-        uint256 inactivityPeriod,
-        bool isActive
-    ) {
+    function getInheritanceConfig(address account)
+        external
+        view
+        returns (address inheritor, uint256 inactivityPeriod, bool isActive)
+    {
         InheritanceConfig memory config = inheritanceConfigs[account];
         return (config.inheritor, config.inactivityPeriod, config.isActive);
     }
@@ -257,11 +243,11 @@ contract InheritanceManager {
     /**
      * @notice Get inactivity record for an account
      */
-    function getInactivityRecord(address account) external view returns (
-        uint256 startBlock,
-        uint256 startNonce,
-        bool isMarked
-    ) {
+    function getInactivityRecord(address account)
+        external
+        view
+        returns (uint256 startBlock, uint256 startNonce, bool isMarked)
+    {
         InactivityRecord memory record = inactivityRecords[account];
         return (record.startBlock, record.startNonce, record.isMarked);
     }
@@ -276,11 +262,7 @@ contract InheritanceManager {
      * @return bool True if the signature is valid
      * @notice This function supports both ECDSA signatures from EOAs and ERC-1271 signatures from smart contracts
      */
-    function _verifySignature(
-        bytes32 hash,
-        bytes memory signature,
-        address signer
-    ) internal view returns (bool) {
+    function _verifySignature(bytes32 hash, bytes memory signature, address signer) internal view returns (bool) {
         return SignatureCheckerLib.isValidSignatureNow(signer, hash, signature);
     }
 
@@ -291,10 +273,7 @@ contract InheritanceManager {
      * @return address The recovered signer address
      * @notice Only works for EOA signatures, use _verifySignature for universal support
      */
-    function _recoverSigner(
-        bytes32 hash,
-        bytes memory signature
-    ) internal view returns (address) {
+    function _recoverSigner(bytes32 hash, bytes memory signature) internal view returns (address) {
         return ECDSA.recover(hash, signature);
     }
 
@@ -304,12 +283,7 @@ contract InheritanceManager {
      * @param inheritor The address that will inherit the account
      * @param inactivityPeriod How long the account must be inactive (in blocks)
      */
-    function _validateInheritanceConfig(
-        address account,
-        address inheritor,
-        uint256 inactivityPeriod
-    ) internal view {
-
+    function _validateInheritanceConfig(address account, address inheritor, uint256 inactivityPeriod) internal view {
         if (msg.sender != account && authorizedSigners[account] != msg.sender) {
             revert UnauthorizedCaller();
         }
@@ -377,11 +351,8 @@ contract InheritanceManager {
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
         _validateInactivityStartData(account, blockNumber, blockHash, stateRoot, accountStateProof, config);
-        inactivityRecords[account] = InactivityRecord({
-            startBlock: blockNumber,
-            startNonce: accountStateProof.nonce,
-            isMarked: true
-        });
+        inactivityRecords[account] =
+            InactivityRecord({startBlock: blockNumber, startNonce: accountStateProof.nonce, isMarked: true});
 
         emit InactivityMarked(account, blockNumber, accountStateProof.nonce, accountStateProof.balance);
     }
@@ -425,11 +396,7 @@ contract InheritanceManager {
 
         uint256 requiredBlock = record.startBlock + config.inactivityPeriod;
         if (currentBlock < requiredBlock) {
-            revert InactivityPeriodNotMetDetailed(
-                currentBlock,
-                requiredBlock,
-                requiredBlock - currentBlock
-            );
+            revert InactivityPeriodNotMetDetailed(currentBlock, requiredBlock, requiredBlock - currentBlock);
         }
 
         if (!verifyBlockHash(currentBlock, currentBlockHash)) {
@@ -472,7 +439,9 @@ contract InheritanceManager {
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
         InactivityRecord memory record = inactivityRecords[account];
-        _validateInheritanceClaimingData(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof, config, record);
+        _validateInheritanceClaimingData(
+            account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof, config, record
+        );
         inheritanceClaimed[account] = true;
 
         authorizedSigners[account] = config.inheritor;

@@ -41,10 +41,8 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         });
 
         // Generate proper Patricia Trie proof
-        (bytes32 stateRoot, bytes[] memory proof) = patriciaHelper.generateEthereumAccountProof(
-            testAccount,
-            accountState
-        );
+        (bytes32 stateRoot, bytes[] memory proof) =
+            patriciaHelper.generateEthereumAccountProof(testAccount, accountState);
 
         // Convert bytes[] to bytes32[] for compatibility
         bytes32[] memory proof32 = new bytes32[](proof.length);
@@ -63,7 +61,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         });
 
         bool result = StateVerifier.verifyAccountStateWithPatriciaTrie(testAccount, stateRoot, stateVerifierProof);
-        
+
         // Note: This might fail initially because our helper generates simplified proofs
         // The test demonstrates the integration structure
         console.log("Patricia Trie verification result:", result);
@@ -84,10 +82,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
 
         // Generate binary Merkle proof using existing helper
         (bytes32 stateRoot, bytes32[] memory proof) = stateProofHelper.generateSingleStateProof(
-            testAccount,
-            targetState,
-            new address[](0),
-            new InheritanceManager.AccountStateProof[](0)
+            testAccount, targetState, new address[](0), new InheritanceManager.AccountStateProof[](0)
         );
         targetState.proof = proof;
 
@@ -118,10 +113,8 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         });
 
         // Generate Patricia Trie proof
-        (bytes32 stateRoot, bytes[] memory proof) = patriciaHelper.generateEthereumAccountProof(
-            testAccount,
-            accountState
-        );
+        (bytes32 stateRoot, bytes[] memory proof) =
+            patriciaHelper.generateEthereumAccountProof(testAccount, accountState);
 
         // Convert to bytes32[] format
         bytes32[] memory proof32 = new bytes32[](proof.length);
@@ -140,7 +133,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         });
 
         bool result = StateVerifier.verifyAccountState(testAccount, stateRoot, stateVerifierProof);
-        
+
         console.log("Main verification (Patricia Trie) result:", result);
         // Note: May fail with simplified proof, but demonstrates the integration
     }
@@ -171,10 +164,8 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         });
 
         // Generate multi-account Patricia Trie proofs
-        (bytes32 stateRoot, bytes[][] memory proofs) = patriciaHelper.generateMultiAccountProofs(
-            accounts,
-            accountStates
-        );
+        (bytes32 stateRoot, bytes[][] memory proofs) =
+            patriciaHelper.generateMultiAccountProofs(accounts, accountStates);
 
         // Test verification for first account
         bytes32[] memory proof1_32 = new bytes32[](proofs[0].length);
@@ -233,14 +224,10 @@ contract EthereumPatriciaTrieVerificationTest is Test {
             codeHash: keccak256(abi.encodePacked("code", testAccount)),
             proof: stateProofHelper.generateAccountProof(testAccount, 100, 1 ether)
         });
-        
+
         // This should work with the current binary Merkle implementation
         // TODO: Replace with Patricia Trie when we have proper proof generation
-        inheritanceManager.markInactivityStartWithProof(
-            testAccount,
-            blockHeaderRLP,
-            targetState
-        );
+        inheritanceManager.markInactivityStartWithProof(testAccount, blockHeaderRLP, targetState);
 
         // Verify inactivity was marked
         (uint256 startBlock, uint256 startNonce, bool isMarked) = inheritanceManager.inactivityRecords(testAccount);

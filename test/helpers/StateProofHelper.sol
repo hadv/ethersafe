@@ -47,14 +47,14 @@ contract StateProofHelper {
         bytes memory dummyBytes = new bytes(256); // 256 bytes for logsBloom
 
         return abi.encodePacked(
-            _encodeRLPBytes32(dummyHash),        // 0: parentHash
-            _encodeRLPBytes32(dummyHash),        // 1: ommersHash
-            _encodeRLPAddress(dummyAddress),     // 2: beneficiary
-            _encodeRLPBytes32(stateRoot),        // 3: stateRoot (CORRECT POSITION)
-            _encodeRLPBytes32(dummyHash),        // 4: transactionsRoot
-            _encodeRLPBytes32(dummyHash),        // 5: receiptsRoot
-            _encodeRLPBytes(dummyBytes),         // 6: logsBloom
-            _encodeRLPUint(0)                    // 7: difficulty
+            _encodeRLPBytes32(dummyHash), // 0: parentHash
+            _encodeRLPBytes32(dummyHash), // 1: ommersHash
+            _encodeRLPAddress(dummyAddress), // 2: beneficiary
+            _encodeRLPBytes32(stateRoot), // 3: stateRoot (CORRECT POSITION)
+            _encodeRLPBytes32(dummyHash), // 4: transactionsRoot
+            _encodeRLPBytes32(dummyHash), // 5: receiptsRoot
+            _encodeRLPBytes(dummyBytes), // 6: logsBloom
+            _encodeRLPUint(0) // 7: difficulty
         );
     }
 
@@ -62,13 +62,13 @@ contract StateProofHelper {
         bytes32 dummyHash = keccak256("dummy");
 
         return abi.encodePacked(
-            _encodeRLPUint(blockNumber),         // 8: number (CORRECT POSITION)
-            _encodeRLPUint(0),                   // 9: gasLimit
-            _encodeRLPUint(0),                   // 10: gasUsed
-            _encodeRLPUint(0),                   // 11: timestamp
-            _encodeRLPBytes(new bytes(0)),       // 12: extraData
-            _encodeRLPBytes32(dummyHash),        // 13: mixHash
-            _encodeRLPUint(0)                    // 14: nonce
+            _encodeRLPUint(blockNumber), // 8: number (CORRECT POSITION)
+            _encodeRLPUint(0), // 9: gasLimit
+            _encodeRLPUint(0), // 10: gasUsed
+            _encodeRLPUint(0), // 11: timestamp
+            _encodeRLPBytes(new bytes(0)), // 12: extraData
+            _encodeRLPBytes32(dummyHash), // 13: mixHash
+            _encodeRLPUint(0) // 14: nonce
         );
     }
 
@@ -82,8 +82,6 @@ contract StateProofHelper {
         return keccak256(header);
     }
 
-
-
     /**
      * @dev Encode data as RLP list
      */
@@ -93,11 +91,7 @@ contract StateProofHelper {
         } else {
             // For longer lists, we need length encoding
             bytes memory lengthBytes = _uintToBytes(data.length);
-            return abi.encodePacked(
-                bytes1(uint8(0xf7 + lengthBytes.length)),
-                lengthBytes,
-                data
-            );
+            return abi.encodePacked(bytes1(uint8(0xf7 + lengthBytes.length)), lengthBytes, data);
         }
     }
 
@@ -149,16 +143,8 @@ contract StateProofHelper {
 
         // Long string encoding
         bytes memory lengthBytes = _uintToBytes(value.length);
-        return abi.encodePacked(
-            bytes1(uint8(0xb7 + lengthBytes.length)),
-            lengthBytes,
-            value
-        );
+        return abi.encodePacked(bytes1(uint8(0xb7 + lengthBytes.length)), lengthBytes, value);
     }
-
-
-
-
 
     /**
      * @dev Generate a simple account proof for testing
@@ -167,11 +153,11 @@ contract StateProofHelper {
      * @param balance The account balance
      * @return proof A simple mock Merkle proof
      */
-    function generateAccountProof(
-        address account,
-        uint256 nonce,
-        uint256 balance
-    ) external pure returns (bytes32[] memory proof) {
+    function generateAccountProof(address account, uint256 nonce, uint256 balance)
+        external
+        pure
+        returns (bytes32[] memory proof)
+    {
         // Create a simple mock proof for testing
         proof = new bytes32[](2);
         proof[0] = keccak256(abi.encodePacked("proof1", account, nonce));
@@ -257,23 +243,18 @@ contract StateProofHelper {
      * @return stateRoot The generated state root
      * @return proofs Array of Merkle proofs for each account
      */
-    function generateStateProofs(
-        address[] memory accounts,
-        InheritanceManager.AccountStateProof[] memory accountStates
-    ) external pure returns (
-        bytes32 stateRoot,
-        bytes32[][] memory proofs
-    ) {
+    function generateStateProofs(address[] memory accounts, InheritanceManager.AccountStateProof[] memory accountStates)
+        external
+        pure
+        returns (bytes32 stateRoot, bytes32[][] memory proofs)
+    {
         return _generateStateProofsInternal(accounts, accountStates);
     }
 
     function _generateStateProofsInternal(
         address[] memory accounts,
         InheritanceManager.AccountStateProof[] memory accountStates
-    ) internal pure returns (
-        bytes32 stateRoot,
-        bytes32[][] memory proofs
-    ) {
+    ) internal pure returns (bytes32 stateRoot, bytes32[][] memory proofs) {
         require(accounts.length == accountStates.length, "Array length mismatch");
 
         // Create leaves for the Merkle tree
@@ -301,23 +282,20 @@ contract StateProofHelper {
         InheritanceManager.AccountStateProof memory targetState,
         address[] memory otherAccounts,
         InheritanceManager.AccountStateProof[] memory otherStates
-    ) external pure returns (
-        bytes32 stateRoot,
-        bytes32[] memory proof
-    ) {
+    ) external pure returns (bytes32 stateRoot, bytes32[] memory proof) {
         // Combine target with other accounts
         address[] memory allAccounts = new address[](otherAccounts.length + 1);
-        InheritanceManager.AccountStateProof[] memory allStates = 
+        InheritanceManager.AccountStateProof[] memory allStates =
             new InheritanceManager.AccountStateProof[](otherStates.length + 1);
-        
+
         allAccounts[0] = targetAccount;
         allStates[0] = targetState;
-        
+
         for (uint256 i = 0; i < otherAccounts.length; i++) {
             allAccounts[i + 1] = otherAccounts[i];
             allStates[i + 1] = otherStates[i];
         }
-        
+
         bytes32[][] memory allProofs;
         (stateRoot, allProofs) = _generateStateProofsInternal(allAccounts, allStates);
         proof = allProofs[0]; // Return proof for target account (index 0)
@@ -326,10 +304,11 @@ contract StateProofHelper {
     /**
      * @dev Create account leaf hash according to Ethereum's state trie format
      */
-    function _createAccountLeaf(
-        address account,
-        InheritanceManager.AccountStateProof memory accountState
-    ) internal pure returns (bytes32) {
+    function _createAccountLeaf(address account, InheritanceManager.AccountStateProof memory accountState)
+        internal
+        pure
+        returns (bytes32)
+    {
         // Encode the account state according to Ethereum's RLP encoding as a proper RLP list
         bytes memory content = abi.encodePacked(
             _encodeRLPUint(accountState.nonce),
@@ -357,60 +336,56 @@ contract StateProofHelper {
      * @return root The Merkle root
      * @return proofs Array of proofs for each leaf
      */
-    function _buildMerkleTree(
-        bytes32[] memory leaves
-    ) internal pure returns (
-        bytes32 root,
-        bytes32[][] memory proofs
-    ) {
+    function _buildMerkleTree(bytes32[] memory leaves)
+        internal
+        pure
+        returns (bytes32 root, bytes32[][] memory proofs)
+    {
         uint256 n = leaves.length;
         require(n > 0, "No leaves provided");
-        
+
         // For simplicity, we'll create a balanced binary tree
         // In a real implementation, this would follow Ethereum's Patricia Merkle Trie
-        
+
         if (n == 1) {
             root = leaves[0];
             proofs = new bytes32[][](1);
             proofs[0] = new bytes32[](0); // Empty proof for single leaf
             return (root, proofs);
         }
-        
+
         // Build tree level by level
         bytes32[] memory currentLevel = new bytes32[](n);
         for (uint256 i = 0; i < n; i++) {
             currentLevel[i] = leaves[i];
         }
-        
+
         // Store all levels for proof generation
         bytes32[][] memory levels = new bytes32[][](32); // Max 32 levels
         uint256 levelCount = 0;
-        
+
         while (currentLevel.length > 1) {
             levels[levelCount] = currentLevel;
             levelCount++;
-            
+
             uint256 nextLevelSize = (currentLevel.length + 1) / 2;
             bytes32[] memory nextLevel = new bytes32[](nextLevelSize);
-            
+
             for (uint256 i = 0; i < nextLevelSize; i++) {
                 if (i * 2 + 1 < currentLevel.length) {
                     // Hash two children
-                    nextLevel[i] = keccak256(abi.encodePacked(
-                        currentLevel[i * 2],
-                        currentLevel[i * 2 + 1]
-                    ));
+                    nextLevel[i] = keccak256(abi.encodePacked(currentLevel[i * 2], currentLevel[i * 2 + 1]));
                 } else {
                     // Odd number of nodes, promote the last one
                     nextLevel[i] = currentLevel[i * 2];
                 }
             }
-            
+
             currentLevel = nextLevel;
         }
-        
+
         root = currentLevel[0];
-        
+
         // Generate proofs for each original leaf
         proofs = new bytes32[][](n);
         for (uint256 leafIndex = 0; leafIndex < n; leafIndex++) {
@@ -421,15 +396,15 @@ contract StateProofHelper {
     /**
      * @dev Generate proof for a specific leaf
      */
-    function _generateProofForLeaf(
-        bytes32[][] memory levels,
-        uint256 levelCount,
-        uint256 leafIndex
-    ) internal pure returns (bytes32[] memory proof) {
+    function _generateProofForLeaf(bytes32[][] memory levels, uint256 levelCount, uint256 leafIndex)
+        internal
+        pure
+        returns (bytes32[] memory proof)
+    {
         bytes32[] memory proofElements = new bytes32[](levelCount);
         uint256 proofLength = 0;
         uint256 currentIndex = leafIndex;
-        
+
         for (uint256 level = 0; level < levelCount; level++) {
             uint256 siblingIndex;
             if (currentIndex % 2 == 0) {
@@ -439,15 +414,15 @@ contract StateProofHelper {
                 // Current node is right child, sibling is left
                 siblingIndex = currentIndex - 1;
             }
-            
+
             if (siblingIndex < levels[level].length) {
                 proofElements[proofLength] = levels[level][siblingIndex];
                 proofLength++;
             }
-            
+
             currentIndex = currentIndex / 2;
         }
-        
+
         // Trim proof to actual length
         proof = new bytes32[](proofLength);
         for (uint256 i = 0; i < proofLength; i++) {
@@ -462,7 +437,7 @@ contract StateProofHelper {
         if (value == 0) {
             return hex"80"; // RLP encoding of 0
         }
-        
+
         // Convert to bytes and remove leading zeros
         bytes memory valueBytes = abi.encodePacked(value);
         uint256 leadingZeros = 0;
@@ -470,12 +445,12 @@ contract StateProofHelper {
             if (valueBytes[i] != 0) break;
             leadingZeros++;
         }
-        
+
         bytes memory trimmed = new bytes(valueBytes.length - leadingZeros);
         for (uint256 i = 0; i < trimmed.length; i++) {
             trimmed[i] = valueBytes[leadingZeros + i];
         }
-        
+
         // Add RLP length prefix
         if (trimmed.length == 1 && uint8(trimmed[0]) < 0x80) {
             return trimmed; // Single byte < 0x80 is encoded as itself

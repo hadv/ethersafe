@@ -18,13 +18,12 @@ import "./InheritanceManager.sol";
  * - Proper return data handling
  */
 contract EIP7702InheritanceController is BareAccount {
-    
     InheritanceManager public immutable inheritanceManager;
-    
+
     constructor(address _inheritanceManager) {
         inheritanceManager = InheritanceManager(_inheritanceManager);
     }
-    
+
     /**
      * @dev Override authorization logic to check inheritance status
      * This replaces the default "msg.sender == address(this)" check with inheritance verification
@@ -37,9 +36,7 @@ contract EIP7702InheritanceController is BareAccount {
         (address inheritor,,) = inheritanceManager.getInheritanceConfig(address(this));
         require(msg.sender == inheritor, "Not the inheritor");
     }
-    
 
-    
     /**
      * @notice Check if this EOA can be controlled by the caller
      */
@@ -66,7 +63,7 @@ contract EIP7702InheritanceController is BareAccount {
     function isInheritanceClaimed() external view returns (bool) {
         return inheritanceManager.isInheritanceClaimed(address(this));
     }
-    
+
     // Allow receiving ETH
     receive() external payable {}
 }

@@ -11,14 +11,14 @@ import {RLPReader as RLP} from "solidity-rlp/RLPReader.sol";
  * @title EthereumStateVerification
  * @dev Battle-tested library for Ethereum block header, state root, and account state proof verification
  * @notice Combines best practices from Aragon EVM Storage Proofs, Polytope Labs, and Solady libraries
- * 
+ *
  * FEATURES:
  * - Block header RLP decoding and verification
  * - State root extraction from block headers
  * - Account state proof verification (Patricia Trie + Binary Merkle fallback)
  * - Gas-optimized using Solady libraries
  * - Production-ready verification methods
- * 
+ *
  * VERIFICATION METHODS:
  * - Primary: Polytope Labs Patricia Trie verification for full Ethereum compatibility
  * - Fallback: Solady binary Merkle proof verification for testing/compatibility
@@ -49,8 +49,6 @@ library StateVerifier {
         bytes32[] proof;
     }
 
-
-
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -64,8 +62,6 @@ library StateVerifier {
     /*//////////////////////////////////////////////////////////////
                         BLOCK HEADER VERIFICATION
     //////////////////////////////////////////////////////////////*/
-
-
 
     /**
      * @notice Extract state root from RLP-encoded block header using battle-tested RLPReader
@@ -125,9 +121,11 @@ library StateVerifier {
      * @return stateRoot The extracted state root
      * @return blockHash The computed hash of the block header
      */
-    function extractBlockDataFromHeader(
-        bytes calldata blockHeaderRLP
-    ) external pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
+    function extractBlockDataFromHeader(bytes calldata blockHeaderRLP)
+        external
+        pure
+        returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash)
+    {
         // Extract state root using battle-tested RLP library
         stateRoot = _extractStateRootFromRLP(blockHeaderRLP);
 
@@ -211,51 +209,6 @@ library StateVerifier {
     }
 
     /**
-     * @notice Verify account state using Patricia Trie with proper bytes[] proof format
-     * @dev This is the production-ready Patricia Trie verification function
-     * @param account The account address to verify
-     * @param stateRoot The state root to verify against
-     * @param accountStateProof The account state data
-     * @param proof The Patricia Trie proof in bytes[] format (from eth_getProof)
-     * @return isValid Whether the proof is valid
-     */
-    function verifyAccountStateWithPatriciaTrieProof(
-        address account,
-        bytes32 stateRoot,
-        AccountStateProof memory accountStateProof,
-        bytes[] memory proof
-    ) external pure returns (bool isValid) {
-        // Prepare the account key (Ethereum uses keccak256 of the address)
-        bytes memory accountKey = abi.encodePacked(keccak256(abi.encodePacked(account)));
-
-        // Prepare the keys array for Polytope Labs verification
-        bytes[] memory keys = new bytes[](1);
-        keys[0] = accountKey;
-
-        // Use Polytope Labs VerifyEthereumProof for production verification
-        StorageValue[] memory values = MerklePatricia.VerifyEthereumProof(
-            stateRoot,
-            proof,
-            keys
-        );
-
-        // Check if we got a valid result
-        if (values.length != 1) {
-            return false;
-        }
-
-        // Decode the returned account state and verify it matches our expected values
-        bytes memory returnedAccountState = values[0].value;
-
-        // The returned value should be the RLP-encoded account state
-        // We need to verify it matches our expected account state
-        bytes memory expectedAccountRLP = _encodeAccountState(accountStateProof);
-
-        // Compare the returned state with our expected state
-        return keccak256(returnedAccountState) == keccak256(expectedAccountRLP);
-    }
-
-    /**
      * @notice Verify account state using Solady binary Merkle proof verification
      * @dev Fallback verification method for testing and compatibility
      * @param account The account address to verify
@@ -305,8 +258,6 @@ library StateVerifier {
         return MerkleProofLib.verify(accountStateProof.proof, stateRoot, leafHash);
     }
 
-
-
     /*//////////////////////////////////////////////////////////////
                             HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -317,9 +268,7 @@ library StateVerifier {
      * @param accountState The account state to encode
      * @return Encoded account state using Solady LibRLP
      */
-    function _encodeAccountState(
-        AccountStateProof memory accountState
-    ) internal pure returns (bytes memory) {
+    function _encodeAccountState(AccountStateProof memory accountState) internal pure returns (bytes memory) {
         LibRLP.List memory accountList = LibRLP.p();
         LibRLP.p(accountList, accountState.nonce);
         LibRLP.p(accountList, accountState.balance);
@@ -356,11 +305,11 @@ library StateVerifier {
      * @param accountStateProof The account state and proof
      * @return isValid Whether the proof is valid
      */
-    function verifyAccountState(
-        address account,
-        bytes32 stateRoot,
-        AccountStateProof memory accountStateProof
-    ) external pure returns (bool isValid) {
+    function verifyAccountState(address account, bytes32 stateRoot, AccountStateProof memory accountStateProof)
+        external
+        pure
+        returns (bool isValid)
+    {
         // Production-ready verification with intelligent proof format detection
 
         // Strategy: Try Patricia Trie first (for real eth_getProof data),
@@ -442,6 +391,4 @@ library StateVerifier {
 
         return true;
     }
-
-
 }
