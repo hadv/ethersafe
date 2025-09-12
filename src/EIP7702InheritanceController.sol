@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../lib/account-abstraction/contracts/core/BareAccount.sol";
+import "account-abstraction/core/BareAccount.sol";
 import "./InheritanceManager.sol";
 
 /**
