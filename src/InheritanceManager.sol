@@ -69,37 +69,7 @@ contract InheritanceManager {
         bytes32[] proof;            // Merkle proof path
     }
 
-    /**
-     * @dev Ethereum block header structure for RLP decoding and state root extraction
-     * This represents the complete block header as it appears on Ethereum mainnet
-     *
-     * IMPORTANT: The order of fields MUST match the exact RLP encoding order used by Ethereum:
-     * [parentHash, uncleHash, coinbase, stateRoot, transactionRoot, receiptRoot, logsBloom,
-     *  difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce,
-     *  baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot]
-     */
-    struct BlockHeader {
-        bytes32 parentHash;         // Hash of parent block
-        bytes32 uncleHash;          // Hash of uncle blocks (ommers)
-        address coinbase;           // Miner/validator address
-        bytes32 stateRoot;          // STATE ROOT - This is what we extract and verify
-        bytes32 transactionRoot;    // Merkle root of transactions
-        bytes32 receiptRoot;        // Merkle root of transaction receipts
-        bytes logsBloom;            // Bloom filter for logs (256 bytes)
-        uint256 difficulty;         // Block difficulty (0 for PoS)
-        uint256 number;             // Block number
-        uint256 gasLimit;           // Gas limit for block
-        uint256 gasUsed;            // Gas used in block
-        uint256 timestamp;          // Block timestamp
-        bytes extraData;            // Extra data field
-        bytes32 mixHash;            // Mix hash for PoW (random for PoS)
-        uint64 nonce;               // Block nonce (0 for PoS)
-        uint256 baseFeePerGas;      // EIP-1559 base fee (London fork)
-        bytes32 withdrawalsRoot;    // EIP-4895 withdrawals root (Shanghai fork)
-        uint256 blobGasUsed;        // EIP-4844 blob gas used (Cancun fork)
-        uint256 excessBlobGas;      // EIP-4844 excess blob gas (Cancun fork)
-        bytes32 parentBeaconBlockRoot; // EIP-4788 parent beacon block root (Cancun fork)
-    }
+
 
     // --- State Variables ---
     
