@@ -183,23 +183,9 @@ contract InheritanceManager {
      * @param blockHeaderRLP The RLP-encoded block header
      * @return blockNumber The extracted block number
      */
-    function _decodeBlockNumberFromRLP(bytes calldata blockHeaderRLP) internal view returns (uint256 blockNumber) {
-        // Simplified implementation - extract block number from known position
-        // In production, this should use proper RLP decoding
-        // For now, we'll use a placeholder that works with our test data
-
-        // TODO: Implement proper RLP decoding for block number extraction
-        // This is a temporary implementation for compatibility
-        assembly {
-            // Extract block number from a known offset in the RLP structure
-            // This is simplified and should be replaced with proper RLP parsing
-            blockNumber := calldataload(add(blockHeaderRLP.offset, 0x80))
-        }
-
-        // Fallback to a reasonable block number for testing
-        if (blockNumber == 0 || blockNumber > block.number + 1000) {
-            blockNumber = block.number - 1;
-        }
+    function _decodeBlockNumberFromRLP(bytes calldata blockHeaderRLP) internal pure returns (uint256 blockNumber) {
+        // Use the battle-tested StateVerifier library for RLP decoding
+        return StateVerifier._extractBlockNumberFromRLP(blockHeaderRLP);
     }
 
     /**

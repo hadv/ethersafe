@@ -3,3 +3,4 @@ solady/=lib/solady/src/
 forge-std/=lib/forge-std/src/
 account-abstraction/=lib/account-abstraction/contracts/
 solidity-merkle-trees/=lib/solidity-merkle-trees/src/
+solidity-rlp/=lib/Solidity-RLP/contracts/

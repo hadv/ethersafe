@@ -11,3 +11,6 @@
 [submodule "lib/solidity-merkle-trees"]
 	path = lib/solidity-merkle-trees
 	url = https://github.com/polytope-labs/solidity-merkle-trees
+[submodule "lib/Solidity-RLP"]
+	path = lib/Solidity-RLP
+	url = https://github.com/hamdiallam/Solidity-RLP

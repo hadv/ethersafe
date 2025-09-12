@@ -5,6 +5,7 @@ import "solady/utils/LibRLP.sol";
 import "solady/utils/MerkleProofLib.sol";
 import "solidity-merkle-trees/MerklePatricia.sol";
 import "solidity-merkle-trees/Types.sol";
+import {RLPReader as BattleTestedRLP} from "solidity-rlp/RLPReader.sol";
 
 /**
  * @title EthereumStateVerification
@@ -25,6 +26,8 @@ import "solidity-merkle-trees/Types.sol";
  */
 library StateVerifier {
     using LibRLP for bytes;
+    using BattleTestedRLP for bytes;
+    using BattleTestedRLP for BattleTestedRLP.RLPItem;
 
     /*//////////////////////////////////////////////////////////////
                                 STRUCTS
@@ -106,31 +109,27 @@ library StateVerifier {
     }
 
     /**
-     * @notice Extract state root from RLP-encoded block header
+     * @notice Extract state root from RLP-encoded block header using battle-tested RLPReader
      * @dev Ethereum block header structure: [parentHash, ommersHash, beneficiary, stateRoot, ...]
      * @param blockHeaderRLP RLP-encoded block header
      * @return stateRoot The state root hash
      */
     function _extractStateRootFromRLP(bytes memory blockHeaderRLP) internal pure returns (bytes32 stateRoot) {
-        // Ethereum block header RLP structure (15 fields):
+        // Ethereum block header RLP structure (15+ fields):
         // 0: parentHash, 1: ommersHash, 2: beneficiary, 3: stateRoot, 4: transactionsRoot,
         // 5: receiptsRoot, 6: logsBloom, 7: difficulty, 8: number, 9: gasLimit,
-        // 10: gasUsed, 11: timestamp, 12: extraData, 13: mixHash, 14: nonce
+        // 10: gasUsed, 11: timestamp, 12: extraData, 13: mixHash, 14: nonce, ...
 
-        uint256 offset = 0;
-        uint256 listLength;
+        // Use battle-tested RLPReader library
+        BattleTestedRLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
 
-        // Decode RLP list prefix
-        (offset, listLength) = _decodeRLPListPrefix(blockHeaderRLP, offset);
-
-        // Skip first 3 fields to get to stateRoot (index 3)
-        for (uint256 i = 0; i < 3; i++) {
-            offset = _skipRLPItem(blockHeaderRLP, offset);
+        // Ensure we have enough fields
+        if (headerItems.length < 4) {
+            revert InvalidRLPEncoding();
         }
 
-        // Decode the state root (4th field, index 3)
-        bytes memory stateRootBytes;
-        (offset, stateRootBytes) = _decodeRLPBytes(blockHeaderRLP, offset);
+        // Extract state root (field 3, index 3)
+        bytes memory stateRootBytes = headerItems[3].toBytes();
 
         if (stateRootBytes.length != 32) {
             revert InvalidRLPEncoding();
@@ -142,131 +141,22 @@ library StateVerifier {
     }
 
     /**
-     * @notice Decode RLP list prefix and return offset and length
-     * @param data RLP encoded data
-     * @param offset Current offset in the data
-     * @return newOffset Updated offset after decoding prefix
-     * @return length Length of the list content
+     * @notice Extract block number from RLP-encoded block header using battle-tested RLPReader
+     * @dev Block number is at index 8 in the Ethereum block header
+     * @param blockHeaderRLP RLP-encoded block header
+     * @return blockNumber The block number
      */
-    function _decodeRLPListPrefix(
-        bytes memory data,
-        uint256 offset
-    ) internal pure returns (uint256 newOffset, uint256 length) {
-        require(offset < data.length, "RLP: offset out of bounds");
+    function _extractBlockNumberFromRLP(bytes memory blockHeaderRLP) external pure returns (uint256 blockNumber) {
+        // Use battle-tested RLPReader library
+        BattleTestedRLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
 
-        uint8 prefix = uint8(data[offset]);
-
-        if (prefix <= 0xf7) {
-            // Short list (0-55 bytes)
-            length = prefix - 0xc0;
-            newOffset = offset + 1;
-        } else {
-            // Long list (>55 bytes)
-            uint256 lengthOfLength = prefix - 0xf7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long list");
-
-            length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = length * 256 + uint8(data[offset + 1 + i]);
-            }
-            newOffset = offset + 1 + lengthOfLength;
-        }
-    }
-
-    /**
-     * @notice Skip an RLP item and return the new offset
-     * @param data RLP encoded data
-     * @param offset Current offset in the data
-     * @return newOffset Updated offset after skipping the item
-     */
-    function _skipRLPItem(bytes memory data, uint256 offset) internal pure returns (uint256 newOffset) {
-        require(offset < data.length, "RLP: offset out of bounds");
-
-        uint8 prefix = uint8(data[offset]);
-
-        if (prefix <= 0x7f) {
-            // Single byte
-            newOffset = offset + 1;
-        } else if (prefix <= 0xb7) {
-            // Short string (0-55 bytes)
-            uint256 length = prefix - 0x80;
-            newOffset = offset + 1 + length;
-        } else if (prefix <= 0xbf) {
-            // Long string (>55 bytes)
-            uint256 lengthOfLength = prefix - 0xb7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long string");
-
-            uint256 length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = length * 256 + uint8(data[offset + 1 + i]);
-            }
-            newOffset = offset + 1 + lengthOfLength + length;
-        } else if (prefix <= 0xf7) {
-            // Short list (0-55 bytes)
-            uint256 length = prefix - 0xc0;
-            newOffset = offset + 1 + length;
-        } else {
-            // Long list (>55 bytes)
-            uint256 lengthOfLength = prefix - 0xf7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long list");
-
-            uint256 length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = length * 256 + uint8(data[offset + 1 + i]);
-            }
-            newOffset = offset + 1 + lengthOfLength + length;
-        }
-    }
-
-    /**
-     * @notice Decode RLP bytes and return the decoded data
-     * @param data RLP encoded data
-     * @param offset Current offset in the data
-     * @return newOffset Updated offset after decoding
-     * @return result Decoded bytes
-     */
-    function _decodeRLPBytes(
-        bytes memory data,
-        uint256 offset
-    ) internal pure returns (uint256 newOffset, bytes memory result) {
-        require(offset < data.length, "RLP: offset out of bounds");
-
-        uint8 prefix = uint8(data[offset]);
-
-        if (prefix <= 0x7f) {
-            // Single byte
-            result = new bytes(1);
-            result[0] = bytes1(prefix);
-            newOffset = offset + 1;
-        } else if (prefix <= 0xb7) {
-            // Short string (0-55 bytes)
-            uint256 length = prefix - 0x80;
-            require(offset + 1 + length <= data.length, "RLP: invalid short string");
-
-            result = new bytes(length);
-            for (uint256 i = 0; i < length; i++) {
-                result[i] = data[offset + 1 + i];
-            }
-            newOffset = offset + 1 + length;
-        } else if (prefix <= 0xbf) {
-            // Long string (>55 bytes)
-            uint256 lengthOfLength = prefix - 0xb7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long string");
-
-            uint256 length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = length * 256 + uint8(data[offset + 1 + i]);
-            }
-            require(offset + 1 + lengthOfLength + length <= data.length, "RLP: string too long");
-
-            result = new bytes(length);
-            for (uint256 i = 0; i < length; i++) {
-                result[i] = data[offset + 1 + lengthOfLength + i];
-            }
-            newOffset = offset + 1 + lengthOfLength + length;
-        } else {
+        // Ensure we have enough fields (block number is at index 8)
+        if (headerItems.length < 9) {
             revert InvalidRLPEncoding();
         }
+
+        // Extract block number (field 8, index 8)
+        blockNumber = headerItems[8].toUint();
     }
 
     /*//////////////////////////////////////////////////////////////
