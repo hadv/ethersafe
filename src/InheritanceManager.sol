@@ -9,6 +9,8 @@ import "solady/utils/MerkleProofLib.sol";
 import "solady/utils/LibRLP.sol";
 import "solady/utils/ECDSA.sol";
 import "solady/utils/SignatureCheckerLib.sol";
+import "solady/utils/LibString.sol";
+import "solady/utils/SafeCastLib.sol";
 
 /**
  * @title InheritanceManager
@@ -109,6 +111,7 @@ contract InheritanceManager {
     error InheritanceNotConfigured();
     error InactivityNotMarked();
     error InactivityPeriodNotMet();
+    error InactivityPeriodNotMetDetailed(uint256 currentBlock, uint256 requiredBlock, uint256 blocksRemaining);
     error AccountStillActive();
     error InheritanceAlreadyClaimed();
     error InvalidInheritor();
@@ -464,6 +467,36 @@ contract InheritanceManager {
 
     // Custom RLP encoding functions removed - now using gas-optimized Solady LibRLP
 
+    /**
+     * @dev Verify a signature for authorization (supports both EOA and contract signatures)
+     * @param hash The hash that was signed
+     * @param signature The signature to verify
+     * @param signer The expected signer address
+     * @return bool True if the signature is valid
+     * @notice This function supports both ECDSA signatures from EOAs and ERC-1271 signatures from smart contracts
+     */
+    function _verifySignature(
+        bytes32 hash,
+        bytes memory signature,
+        address signer
+    ) internal view returns (bool) {
+        return SignatureCheckerLib.isValidSignatureNow(signer, hash, signature);
+    }
+
+    /**
+     * @dev Recover the signer address from an ECDSA signature
+     * @param hash The hash that was signed
+     * @param signature The ECDSA signature
+     * @return address The recovered signer address
+     * @notice Only works for EOA signatures, use _verifySignature for universal support
+     */
+    function _recoverSigner(
+        bytes32 hash,
+        bytes memory signature
+    ) internal view returns (address) {
+        return ECDSA.recover(hash, signature);
+    }
+
     // --- RLP Decoding Helper Functions ---
 
     /**
@@ -762,8 +795,13 @@ contract InheritanceManager {
         }
 
         // Check if enough time has passed
-        if (currentBlock < record.startBlock + config.inactivityPeriod) {
-            revert InactivityPeriodNotMet();
+        uint256 requiredBlock = record.startBlock + config.inactivityPeriod;
+        if (currentBlock < requiredBlock) {
+            revert InactivityPeriodNotMetDetailed(
+                currentBlock,
+                requiredBlock,
+                requiredBlock - currentBlock
+            );
         }
 
         // Verify current block hash is valid
