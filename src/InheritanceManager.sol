@@ -208,7 +208,7 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata accountStateProof
     ) external {
-        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = _extractBlockDataFromHeader(blockHeaderRLP);
+        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
 
         bytes32 expectedBlockHash = blockhash(blockNumber);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
@@ -228,7 +228,7 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata currentAccountStateProof
     ) external {
-        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = _extractBlockDataFromHeader(blockHeaderRLP);
+        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
 
         bytes32 expectedBlockHash = blockhash(currentBlock);
         require(expectedBlockHash != bytes32(0), "Block hash not available");
@@ -340,71 +340,11 @@ contract InheritanceManager {
 
     // --- Internal/Private Functions ---
 
-    /**
-     * @dev Extract block data from RLP-encoded block header (pure extraction)
-     * @param blockHeaderRLP The complete RLP-encoded block header
-     * @return blockNumber The block number extracted from the header
-     * @return stateRoot The extracted state root from the header
-     * @return blockHash The computed hash of the block header
-     *
-     * This function only extracts data without any validation.
-     * Use _validateBlockHeader() to validate the extracted data.
-     */
-    function _extractBlockDataFromHeader(
-        bytes calldata blockHeaderRLP
-    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
-        (blockNumber, stateRoot) = _decodeBlockNumberAndStateRoot(blockHeaderRLP);
-        blockHash = keccak256(blockHeaderRLP);
-    }
 
 
 
-    /**
-     * @dev Decode block number and state root from RLP-encoded block header
-     * @param rlpData The RLP-encoded block header
-     * @return blockNumber The block number (9th field in the header)
-     * @return stateRoot The state root (4th field in the header)
-     *
-     * Ethereum block header RLP structure:
-     * [parentHash, uncleHash, coinbase, stateRoot, transactionRoot, receiptRoot, logsBloom,
-     *  difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce, ...]
-     *
-     * We need to extract:
-     * - Field 3 (index 3): stateRoot (32 bytes)
-     * - Field 8 (index 8): number (variable length uint256)
-     */
-    function _decodeBlockNumberAndStateRoot(
-        bytes calldata rlpData
-    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot) {
-        uint256 offset = 0;
-        (offset, ) = _decodeRLPListPrefix(rlpData, offset);
-
-        offset = _skipRLPItem(rlpData, offset);
-        offset = _skipRLPItem(rlpData, offset);
-        offset = _skipRLPItem(rlpData, offset);
-        uint256 stateRootLength;
-        (offset, stateRootLength) = _decodeRLPItemPrefix(rlpData, offset);
-        require(stateRootLength == 32, "Invalid state root length");
-
-        assembly {
-            stateRoot := calldataload(add(rlpData.offset, offset))
-        }
-        offset += stateRootLength;
-
-        offset = _skipRLPItem(rlpData, offset);
-        offset = _skipRLPItem(rlpData, offset);
-        offset = _skipRLPItem(rlpData, offset);
-        offset = _skipRLPItem(rlpData, offset);
-        uint256 numberLength;
-        (offset, numberLength) = _decodeRLPItemPrefix(rlpData, offset);
-        require(numberLength <= 32, "Invalid block number length");
 
 
-        blockNumber = 0;
-        for (uint256 i = 0; i < numberLength; i++) {
-            blockNumber = (blockNumber << 8) | uint8(rlpData[offset + i]);
-        }
-    }
 
 
 
@@ -438,73 +378,7 @@ contract InheritanceManager {
         return ECDSA.recover(hash, signature);
     }
 
-    // --- RLP Decoding Helper Functions ---
 
-    /**
-     * @dev Decode RLP list prefix and return offset and length
-     */
-    function _decodeRLPListPrefix(
-        bytes calldata data,
-        uint256 offset
-    ) internal pure returns (uint256 newOffset, uint256 length) {
-        require(offset < data.length, "RLP: offset out of bounds");
-
-        uint8 prefix = uint8(data[offset]);
-
-        if (prefix <= 0xf7) {
-            length = prefix - 0xc0;
-            newOffset = offset + 1;
-        } else {
-            uint256 lengthOfLength = prefix - 0xf7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long list");
-
-            length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = (length << 8) | uint8(data[offset + 1 + i]);
-            }
-            newOffset = offset + 1 + lengthOfLength;
-        }
-    }
-
-    /**
-     * @dev Decode RLP item prefix and return offset and length
-     */
-    function _decodeRLPItemPrefix(
-        bytes calldata data,
-        uint256 offset
-    ) internal pure returns (uint256 newOffset, uint256 length) {
-        require(offset < data.length, "RLP: offset out of bounds");
-
-        uint8 prefix = uint8(data[offset]);
-
-        if (prefix <= 0x7f) {
-            length = 1;
-            newOffset = offset;
-        } else if (prefix <= 0xb7) {
-            length = prefix - 0x80;
-            newOffset = offset + 1;
-        } else {
-            uint256 lengthOfLength = prefix - 0xb7;
-            require(offset + 1 + lengthOfLength <= data.length, "RLP: invalid long string");
-
-            length = 0;
-            for (uint256 i = 0; i < lengthOfLength; i++) {
-                length = (length << 8) | uint8(data[offset + 1 + i]);
-            }
-            newOffset = offset + 1 + lengthOfLength;
-        }
-    }
-
-    /**
-     * @dev Skip an RLP item and return the new offset
-     */
-    function _skipRLPItem(
-        bytes calldata data,
-        uint256 offset
-    ) internal pure returns (uint256 newOffset) {
-        (uint256 itemOffset, uint256 length) = _decodeRLPItemPrefix(data, offset);
-        return itemOffset + length;
-    }
 
 
 

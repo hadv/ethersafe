@@ -159,6 +159,30 @@ library StateVerifier {
         blockNumber = headerItems[8].toUint();
     }
 
+    /**
+     * @notice Extract block number, state root, and compute block hash from RLP-encoded block header
+     * @param blockHeaderRLP The complete RLP-encoded block header
+     * @return blockNumber The extracted block number
+     * @return stateRoot The extracted state root
+     * @return blockHash The computed hash of the block header
+     */
+    function extractBlockDataFromHeader(
+        bytes calldata blockHeaderRLP
+    ) external pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
+        // Extract state root using battle-tested RLP library
+        stateRoot = _extractStateRootFromRLP(blockHeaderRLP);
+
+        // Extract block number using battle-tested RLP library
+        RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
+        if (headerItems.length < 9) {
+            revert InvalidRLPEncoding();
+        }
+        blockNumber = headerItems[8].toUint();
+
+        // Compute block header hash
+        blockHash = keccak256(blockHeaderRLP);
+    }
+
     /*//////////////////////////////////////////////////////////////
                     ACCOUNT STATE VERIFICATION
     //////////////////////////////////////////////////////////////*/
