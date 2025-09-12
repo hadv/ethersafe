@@ -64,61 +64,11 @@ library StateVerifier {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Extract state root from RLP-encoded block header using battle-tested RLPReader
-     * @dev Ethereum block header structure: [parentHash, ommersHash, beneficiary, stateRoot, ...]
-     * @param blockHeaderRLP RLP-encoded block header
-     * @return stateRoot The state root hash
-     */
-    function _extractStateRootFromRLP(bytes memory blockHeaderRLP) internal pure returns (bytes32 stateRoot) {
-        // Ethereum block header RLP structure (15+ fields):
-        // 0: parentHash, 1: ommersHash, 2: beneficiary, 3: stateRoot, 4: transactionsRoot,
-        // 5: receiptsRoot, 6: logsBloom, 7: difficulty, 8: number, 9: gasLimit,
-        // 10: gasUsed, 11: timestamp, 12: extraData, 13: mixHash, 14: nonce, ...
-
-        // Use battle-tested RLPReader library
-        RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
-
-        // Ensure we have enough fields
-        if (headerItems.length < 4) {
-            revert InvalidRLPEncoding();
-        }
-
-        // Extract state root (field 3, index 3)
-        bytes memory stateRootBytes = headerItems[3].toBytes();
-
-        if (stateRootBytes.length != 32) {
-            revert InvalidRLPEncoding();
-        }
-
-        assembly {
-            stateRoot := mload(add(stateRootBytes, 0x20))
-        }
-    }
-
-    /**
-     * @notice Extract block number from RLP-encoded block header using battle-tested RLPReader
-     * @dev Block number is at index 8 in the Ethereum block header
-     * @param blockHeaderRLP RLP-encoded block header
-     * @return blockNumber The block number
-     */
-    function _extractBlockNumberFromRLP(bytes memory blockHeaderRLP) external pure returns (uint256 blockNumber) {
-        // Use battle-tested RLPReader library
-        RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
-
-        // Ensure we have enough fields (block number is at index 8)
-        if (headerItems.length < 9) {
-            revert InvalidRLPEncoding();
-        }
-
-        // Extract block number (field 8, index 8)
-        blockNumber = headerItems[8].toUint();
-    }
-
-    /**
      * @notice Extract block number, state root, and compute block hash from RLP-encoded block header
+     * @dev Ethereum block header structure: [parentHash, ommersHash, beneficiary, stateRoot, ..., number, ...]
      * @param blockHeaderRLP The complete RLP-encoded block header
-     * @return blockNumber The extracted block number
-     * @return stateRoot The extracted state root
+     * @return blockNumber The extracted block number (index 8)
+     * @return stateRoot The extracted state root (index 3)
      * @return blockHash The computed hash of the block header
      */
     function extractBlockDataFromHeader(bytes calldata blockHeaderRLP)
@@ -126,14 +76,29 @@ library StateVerifier {
         pure
         returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash)
     {
-        // Extract state root using battle-tested RLP library
-        stateRoot = _extractStateRootFromRLP(blockHeaderRLP);
+        // Ethereum block header RLP structure (15+ fields):
+        // 0: parentHash, 1: ommersHash, 2: beneficiary, 3: stateRoot, 4: transactionsRoot,
+        // 5: receiptsRoot, 6: logsBloom, 7: difficulty, 8: number, 9: gasLimit,
+        // 10: gasUsed, 11: timestamp, 12: extraData, 13: mixHash, 14: nonce, ...
 
-        // Extract block number using battle-tested RLP library
+        // Parse RLP once and extract all needed fields
         RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
+
+        // Ensure we have enough fields (need at least 9 for block number at index 8)
         if (headerItems.length < 9) {
             revert InvalidRLPEncoding();
         }
+
+        // Extract state root (index 3)
+        bytes memory stateRootBytes = headerItems[3].toBytes();
+        if (stateRootBytes.length != 32) {
+            revert InvalidRLPEncoding();
+        }
+        assembly {
+            stateRoot := mload(add(stateRootBytes, 0x20))
+        }
+
+        // Extract block number (index 8)
         blockNumber = headerItems[8].toUint();
 
         // Compute block header hash
