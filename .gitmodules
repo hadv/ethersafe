@@ -1,3 +1,16 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/account-abstraction"]
+	path = lib/account-abstraction
+	url = https://github.com/Zergity/account-abstraction
+	branch = bare
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady
+[submodule "lib/solidity-merkle-trees"]
+	path = lib/solidity-merkle-trees
+	url = https://github.com/polytope-labs/solidity-merkle-trees
+[submodule "lib/Solidity-RLP"]
+	path = lib/Solidity-RLP
+	url = https://github.com/hamdiallam/Solidity-RLP

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "../src/libraries/EthereumStateVerification.sol";
 import "./helpers/InheritanceManagerTestHelper.sol";
 import "./helpers/StateProofHelper.sol";
 
@@ -17,16 +18,16 @@ contract InheritanceManagerTest is Test {
     // Mock EIP-7702 delegator
     MockEIP7702Delegator public delegator;
     MockERC20 public mockToken;
-    
+
     // Test accounts
     address public accountOwner = address(0x1);
     address public inheritor = address(0x2);
     address public unauthorized = address(0x3);
-    
+
     // Test parameters
     uint256 public constant INACTIVITY_PERIOD = 1_314_000; // ~6 months
     uint256 public constant TEST_BLOCK = 1000;
-    
+
     event InheritanceConfigured(address indexed account, address indexed inheritor, uint256 inactivityPeriod);
     event InheritanceClaimed(address indexed account, address indexed inheritor);
 
@@ -36,12 +37,12 @@ contract InheritanceManagerTest is Test {
         stateProofHelper = new StateProofHelper();
         delegator = new MockEIP7702Delegator();
         mockToken = new MockERC20("Test Token", "TEST");
-        
+
         // Fund test accounts
         vm.deal(accountOwner, 10 ether);
         vm.deal(inheritor, 1 ether);
         vm.deal(unauthorized, 1 ether);
-        
+
         // Set current block number
         vm.roll(TEST_BLOCK);
     }
@@ -50,15 +51,15 @@ contract InheritanceManagerTest is Test {
 
     function testConfigureInheritance() public {
         vm.prank(accountOwner);
-        
+
         vm.expectEmit(true, true, false, true);
         emit InheritanceConfigured(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
+
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
-        (address configuredInheritor, uint256 period, bool isActive) = 
+
+        (address configuredInheritor, uint256 period, bool isActive) =
             inheritanceManager.getInheritanceConfig(accountOwner);
-        
+
         assertEq(configuredInheritor, inheritor);
         assertEq(period, INACTIVITY_PERIOD);
         assertTrue(isActive);
@@ -66,11 +67,9 @@ contract InheritanceManagerTest is Test {
 
     function testConfigureInheritanceUnauthorized() public {
         vm.prank(unauthorized);
-        
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.UnauthorizedCaller.selector
-        ));
-        
+
+        vm.expectRevert(abi.encodeWithSelector(InheritanceManager.UnauthorizedCaller.selector));
+
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
     }
 
@@ -78,14 +77,14 @@ contract InheritanceManagerTest is Test {
         // Account owner authorizes a signer
         vm.prank(accountOwner);
         inheritanceManager.authorizeSigner(unauthorized);
-        
+
         // Authorized signer can configure inheritance
         vm.prank(unauthorized);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
-        (address configuredInheritor, uint256 period, bool isActive) = 
+
+        (address configuredInheritor, uint256 period, bool isActive) =
             inheritanceManager.getInheritanceConfig(accountOwner);
-        
+
         assertEq(configuredInheritor, inheritor);
         assertEq(period, INACTIVITY_PERIOD);
         assertTrue(isActive);
@@ -95,15 +94,15 @@ contract InheritanceManagerTest is Test {
         // Configure inheritance first
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
+
         // Revoke inheritance
         vm.prank(accountOwner);
         inheritanceManager.revokeInheritance(accountOwner);
-        
+
         // Verify revocation
-        (address configuredInheritor, uint256 period, bool isActive) = 
+        (address configuredInheritor, uint256 period, bool isActive) =
             inheritanceManager.getInheritanceConfig(accountOwner);
-        
+
         assertEq(configuredInheritor, address(0));
         assertEq(period, 0);
         assertFalse(isActive);
@@ -123,7 +122,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(targetBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(targetBlock, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: startNonce,
             balance: startBalance,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -151,7 +150,7 @@ contract InheritanceManagerTest is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: startNonce, // Same nonce (inactive)
             balance: newBalance, // Updated balance
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -176,8 +175,6 @@ contract InheritanceManagerTest is Test {
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
 
-
-        
         // Step 2: Mark inactivity start (no asset registration needed!)
         uint256 inactivityBlock = block.number;
 
@@ -185,7 +182,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(inactivityBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(inactivityBlock, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -195,15 +192,11 @@ contract InheritanceManagerTest is Test {
 
         inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
 
-
-
         // Step 3: Wait for inactivity period
         vm.roll(inactivityBlock + INACTIVITY_PERIOD + 1);
 
         // Step 4: Claim inheritance
         vm.prank(inheritor);
-
-
 
         vm.expectEmit(true, true, false, false);
         emit InheritanceClaimed(accountOwner, inheritor);
@@ -212,7 +205,7 @@ contract InheritanceManagerTest is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 42, // same nonce (inactive)
             balance: 5 ether, // same balance (inactive)
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -221,7 +214,7 @@ contract InheritanceManagerTest is Test {
         });
 
         inheritanceManager.claimInheritanceWithProof(accountOwner, claimBlockHeaderRLP, claimAccountStateProof);
-        
+
         // Verify inheritance claimed
         assertTrue(inheritanceManager.isInheritanceClaimed(accountOwner));
         assertEq(inheritanceManager.authorizedSigners(accountOwner), inheritor);
@@ -255,7 +248,7 @@ contract InheritanceManagerTest is Test {
         // Test what caller is received in claimInheritanceWithProof
         vm.prank(inheritor);
         bytes memory dummyHeader = hex"00";
-        InheritanceManager.AccountStateProof memory dummyProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory dummyProof = StateVerifier.AccountStateProof({
             nonce: 0,
             balance: 0,
             storageHash: bytes32(0),
@@ -269,7 +262,8 @@ contract InheritanceManagerTest is Test {
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
 
-        (address configuredInheritor, bool isAuthorized) = inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
+        (address configuredInheritor, bool isAuthorized) =
+            inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
         assertEq(configuredInheritor, inheritor, "Configured inheritor should match");
         assertTrue(isAuthorized, "Inheritor should be authorized");
 
@@ -290,7 +284,8 @@ contract InheritanceManagerTest is Test {
         vm.roll(1000 + INACTIVITY_PERIOD + 1);
 
         // Check authorization before claim
-        (address configuredInheritor, bool isAuthorized) = inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
+        (address configuredInheritor, bool isAuthorized) =
+            inheritanceManager.debugClaimAuthorization(accountOwner, inheritor);
         assertEq(configuredInheritor, inheritor, "Configured inheritor should match");
         assertTrue(isAuthorized, "Inheritor should be authorized");
 
@@ -305,13 +300,13 @@ contract InheritanceManagerTest is Test {
         // Configure and mark inactivity
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
+
         vm.roll(TEST_BLOCK + 100);
 
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -320,15 +315,16 @@ contract InheritanceManagerTest is Test {
         });
 
         inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
-        
+
         // Try to claim before period ends
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2);
 
         uint256 earlyClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2;
         bytes32 earlyClaimStateRoot = inheritanceManager.createTestStateRoot(earlyClaimBlockNumber);
-        bytes memory earlyClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(earlyClaimBlockNumber, earlyClaimStateRoot);
+        bytes memory earlyClaimBlockHeaderRLP =
+            inheritanceManager.createTestBlockHeader(earlyClaimBlockNumber, earlyClaimStateRoot);
 
-        InheritanceManager.AccountStateProof memory earlyClaimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory earlyClaimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -337,23 +333,23 @@ contract InheritanceManagerTest is Test {
         });
 
         vm.prank(inheritor);
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.InactivityPeriodNotMet.selector
-        ));
-        inheritanceManager.claimInheritanceWithProof(accountOwner, earlyClaimBlockHeaderRLP, earlyClaimAccountStateProof);
+        vm.expectRevert(abi.encodeWithSelector(InheritanceManager.InactivityPeriodNotMet.selector));
+        inheritanceManager.claimInheritanceWithProof(
+            accountOwner, earlyClaimBlockHeaderRLP, earlyClaimAccountStateProof
+        );
     }
 
     function testInheritanceClaimAccountActive() public {
         // Configure and mark inactivity
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
+
         vm.roll(TEST_BLOCK + 100);
 
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -362,15 +358,16 @@ contract InheritanceManagerTest is Test {
         });
 
         inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
-        
+
         // Wait for period to pass
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
 
         uint256 activeClaimBlockNumber = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
         bytes32 activeClaimStateRoot = inheritanceManager.createTestStateRoot(activeClaimBlockNumber);
-        bytes memory activeClaimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(activeClaimBlockNumber, activeClaimStateRoot);
+        bytes memory activeClaimBlockHeaderRLP =
+            inheritanceManager.createTestBlockHeader(activeClaimBlockNumber, activeClaimStateRoot);
 
-        InheritanceManager.AccountStateProof memory activeClaimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory activeClaimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 43, // different nonce (account became active)
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -380,10 +377,10 @@ contract InheritanceManagerTest is Test {
 
         // Try to claim with different nonce (account became active)
         vm.prank(inheritor);
-        vm.expectRevert(abi.encodeWithSelector(
-            InheritanceManager.AccountStillActive.selector
-        ));
-        inheritanceManager.claimInheritanceWithProof(accountOwner, activeClaimBlockHeaderRLP, activeClaimAccountStateProof);
+        vm.expectRevert(abi.encodeWithSelector(InheritanceManager.AccountStillActive.selector));
+        inheritanceManager.claimInheritanceWithProof(
+            accountOwner, activeClaimBlockHeaderRLP, activeClaimAccountStateProof
+        );
     }
 
     // --- View Function Tests ---
@@ -392,19 +389,19 @@ contract InheritanceManagerTest is Test {
         // Configure inheritance
         vm.prank(accountOwner);
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
-        
+
         // Before marking inactivity
         (bool canClaim, uint256 blocksRemaining,,) = inheritanceManager.canClaimInheritance(accountOwner);
         assertFalse(canClaim);
         assertEq(blocksRemaining, 0);
-        
+
         // Mark inactivity
         vm.roll(TEST_BLOCK + 100);
 
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -413,13 +410,13 @@ contract InheritanceManagerTest is Test {
         });
 
         inheritanceManager.markInactivityStartWithProof(accountOwner, blockHeaderRLP, accountStateProof);
-        
+
         // Before period completion
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD / 2);
         (canClaim, blocksRemaining,,) = inheritanceManager.canClaimInheritance(accountOwner);
         assertFalse(canClaim);
         assertGt(blocksRemaining, 0);
-        
+
         // After period completion
         vm.roll(TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1);
         (canClaim, blocksRemaining,,) = inheritanceManager.canClaimInheritance(accountOwner);
@@ -442,12 +439,12 @@ contract MockERC20 {
     string public name;
     string public symbol;
     mapping(address => uint256) public balanceOf;
-    
+
     constructor(string memory _name, string memory _symbol) {
         name = _name;
         symbol = _symbol;
     }
-    
+
     function transfer(address to, uint256 amount) external returns (bool) {
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;

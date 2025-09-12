@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import "../../src/InheritanceManager.sol";
+import "../../src/libraries/EthereumStateVerification.sol";
 
 /**
  * @title InheritanceManagerTestHelper
@@ -17,7 +18,6 @@ import "../../src/InheritanceManager.sol";
  * IMPORTANT: This contract is ONLY for unit testing and should NEVER be deployed to production
  */
 contract InheritanceManagerTestHelper {
-
     // Wrap the production contract
     InheritanceManager public immutable productionContract;
 
@@ -52,7 +52,7 @@ contract InheritanceManagerTestHelper {
     function markInactivityStartWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata accountStateProof
+        StateVerifier.AccountStateProof calldata accountStateProof
     ) external {
         if (testMode) {
             _markInactivityStartTestMode(account, blockHeaderRLP, accountStateProof);
@@ -68,9 +68,8 @@ contract InheritanceManagerTestHelper {
     function claimInheritanceWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof
+        StateVerifier.AccountStateProof calldata currentAccountStateProof
     ) external {
-
         if (testMode) {
             _claimInheritanceTestMode(account, blockHeaderRLP, currentAccountStateProof, msg.sender);
         } else {
@@ -78,7 +77,7 @@ contract InheritanceManagerTestHelper {
             productionContract.claimInheritanceWithProof(account, blockHeaderRLP, currentAccountStateProof);
         }
     }
-    
+
     /**
      * @dev Test-friendly version of markInactivityStart
      * Skips complex block header verification for unit tests
@@ -86,18 +85,18 @@ contract InheritanceManagerTestHelper {
     function _markInactivityStartTestMode(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata accountStateProof
+        StateVerifier.AccountStateProof calldata accountStateProof
     ) internal {
         // Extract block number and state root using test-friendly parsing
         (uint256 blockNumber, bytes32 stateRoot) = _parseTestBlockHeader(blockHeaderRLP);
-        
+
         // Verify account state using test-friendly verification
         require(_verifyTestAccountState(account, stateRoot, accountStateProof), "Invalid test state proof");
-        
+
         // Use the production logic for the rest
         _markInactivityStartInternal(account, blockNumber, accountStateProof.nonce, accountStateProof.balance);
     }
-    
+
     /**
      * @dev Test-friendly version of claimInheritance
      * Skips complex block header verification for unit tests
@@ -105,7 +104,7 @@ contract InheritanceManagerTestHelper {
     function _claimInheritanceTestMode(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof,
+        StateVerifier.AccountStateProof calldata currentAccountStateProof,
         address caller
     ) internal {
         // Extract block number and state root using test-friendly parsing
@@ -118,22 +117,21 @@ contract InheritanceManagerTestHelper {
         // If this reverts, we know the issue is before this point
         require(caller != address(0), "Debug: Caller is zero");
 
-
         // For now, use a simplified authorization check in test mode
         // The issue seems to be with storage access in the test environment
         // Use the production logic for the rest, but skip the authorization check
         // since we've already verified it works in isolation
         _claimInheritanceInternalTestMode(account, blockNumber, currentAccountStateProof.nonce, caller);
     }
-    
+
     /**
      * @dev Parse test block headers (simplified format for unit tests)
      * Supports both test format and attempts to parse production format
      */
-    function _parseTestBlockHeader(bytes calldata blockHeaderRLP) 
-        internal 
-        pure 
-        returns (uint256 blockNumber, bytes32 stateRoot) 
+    function _parseTestBlockHeader(bytes calldata blockHeaderRLP)
+        internal
+        pure
+        returns (uint256 blockNumber, bytes32 stateRoot)
     {
         // Check for test format: simple RLP list with [blockNumber, stateRoot]
         if (blockHeaderRLP.length >= 66 && blockHeaderRLP[0] == 0xf8) {
@@ -142,19 +140,19 @@ contract InheritanceManagerTestHelper {
             stateRoot = abi.decode(blockHeaderRLP[34:66], (bytes32));
             return (blockNumber, stateRoot);
         }
-        
+
         // Check for simple test format: [blockNumber, stateRoot] as raw data
         if (blockHeaderRLP.length == 64) {
             blockNumber = abi.decode(blockHeaderRLP[0:32], (uint256));
             stateRoot = abi.decode(blockHeaderRLP[32:64], (bytes32));
             return (blockNumber, stateRoot);
         }
-        
+
         // For production RLP, we'd need to delegate to the production contract
         // For now, revert with a helpful message
         revert("Production RLP parsing not supported in test mode");
     }
-    
+
     /**
      * @dev Test-friendly account state verification
      * Uses simplified verification for test state roots
@@ -162,11 +160,11 @@ contract InheritanceManagerTestHelper {
     function _verifyTestAccountState(
         address account,
         bytes32 stateRoot,
-        InheritanceManager.AccountStateProof memory accountStateProof
+        StateVerifier.AccountStateProof memory accountStateProof
     ) internal pure returns (bool) {
         // Check for obviously invalid proofs first
         bytes32 invalidProofMarker = keccak256("invalid_proof");
-        for (uint i = 0; i < accountStateProof.proof.length; i++) {
+        for (uint256 i = 0; i < accountStateProof.proof.length; i++) {
             if (accountStateProof.proof[i] == invalidProofMarker) {
                 return false;
             }
@@ -175,16 +173,14 @@ contract InheritanceManagerTestHelper {
         // Check if this is a test state root (contains "test" pattern)
         if (_isTestStateRoot(stateRoot)) {
             // Simplified verification for test data
-            return accountStateProof.proof.length > 0 &&
-                   accountStateProof.nonce >= 0 &&
-                   accountStateProof.balance >= 0;
+            return accountStateProof.proof.length > 0 && accountStateProof.nonce >= 0 && accountStateProof.balance >= 0;
         }
 
         // For production verification, we'd delegate to the production contract
         // For now, return true for test purposes
         return true;
     }
-    
+
     /**
      * @dev Check if a state root is from test data
      */
@@ -203,24 +199,20 @@ contract InheritanceManagerTestHelper {
         // This is a simplification for testing purposes
         return true;
     }
-    
+
     // === TEST HELPER FUNCTIONS ===
-    
+
     /**
      * @dev Enable/disable test mode
      */
     function setTestMode(bool _testMode) external {
         testMode = _testMode;
     }
-    
+
     /**
      * @dev Create a simple test block header for unit tests
      */
-    function createTestBlockHeader(uint256 blockNumber, bytes32 stateRoot) 
-        external 
-        pure 
-        returns (bytes memory) 
-    {
+    function createTestBlockHeader(uint256 blockNumber, bytes32 stateRoot) external pure returns (bytes memory) {
         return abi.encodePacked(
             bytes1(0xf8), // RLP long list
             bytes1(0x40), // 64 bytes length
@@ -228,21 +220,21 @@ contract InheritanceManagerTestHelper {
             abi.encode(stateRoot)
         );
     }
-    
+
     /**
      * @dev Create a test state root
      */
     function createTestStateRoot(uint256 blockNumber) external pure returns (bytes32) {
         return keccak256(abi.encodePacked("test_state_root", blockNumber));
     }
-    
+
     /**
      * @dev Direct access to internal marking function for testing
      */
     function markInactivityStartDirect(address account, uint256 blockNumber, uint256 nonce, uint256 balance) external {
         _markInactivityStartInternal(account, blockNumber, nonce, balance);
     }
-    
+
     /**
      * @dev Direct access to internal claiming function for testing
      */
@@ -263,7 +255,7 @@ contract InheritanceManagerTestHelper {
     function debugClaimInheritanceWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof
+        StateVerifier.AccountStateProof calldata currentAccountStateProof
     ) external returns (address) {
         // Return the caller that would be passed to _claimInheritanceTestMode
         return msg.sender;
@@ -272,7 +264,11 @@ contract InheritanceManagerTestHelper {
     /**
      * @dev Debug function to check claim authorization
      */
-    function debugClaimAuthorization(address account, address caller) external view returns (address configuredInheritor, bool isAuthorized) {
+    function debugClaimAuthorization(address account, address caller)
+        external
+        view
+        returns (address configuredInheritor, bool isAuthorized)
+    {
         InheritanceManager.InheritanceConfig storage config = inheritanceConfigs[account];
         return (config.inheritor, caller == config.inheritor);
     }
@@ -325,7 +321,7 @@ contract InheritanceManagerTestHelper {
     function verifyAccountState(
         address account,
         bytes32 stateRoot,
-        InheritanceManager.AccountStateProof memory accountStateProof
+        StateVerifier.AccountStateProof memory accountStateProof
     ) public pure returns (bool isValid) {
         // Simplified verification for testing
         // Check that proof is not empty and has reasonable structure
@@ -336,7 +332,7 @@ contract InheritanceManagerTestHelper {
         // For testing, reject obviously invalid proofs
         // (e.g., proofs that are just keccak256("invalid_proof"))
         bytes32 invalidProofMarker = keccak256("invalid_proof");
-        for (uint i = 0; i < accountStateProof.proof.length; i++) {
+        for (uint256 i = 0; i < accountStateProof.proof.length; i++) {
             if (accountStateProof.proof[i] == invalidProofMarker) {
                 return false;
             }
@@ -346,10 +342,7 @@ contract InheritanceManagerTestHelper {
         return true;
     }
 
-    function verifyBlockHash(
-        uint256 blockNumber,
-        bytes32 providedBlockHash
-    ) public view returns (bool isValid) {
+    function verifyBlockHash(uint256 blockNumber, bytes32 providedBlockHash) public view returns (bool isValid) {
         // For current block, we can't get blockhash
         if (blockNumber >= block.number) {
             return false;
@@ -371,11 +364,11 @@ contract InheritanceManagerTestHelper {
     /**
      * @dev Get inheritance configuration (returns individual values like production contract)
      */
-    function getInheritanceConfig(address account) external view returns (
-        address inheritor,
-        uint256 inactivityPeriod,
-        bool isActive
-    ) {
+    function getInheritanceConfig(address account)
+        external
+        view
+        returns (address inheritor, uint256 inactivityPeriod, bool isActive)
+    {
         if (testMode) {
             InheritanceManager.InheritanceConfig memory config = inheritanceConfigs[account];
             return (config.inheritor, config.inactivityPeriod, config.isActive);
@@ -387,11 +380,11 @@ contract InheritanceManagerTestHelper {
     /**
      * @dev Get inactivity record (returns individual values like production contract)
      */
-    function getInactivityRecord(address account) external view returns (
-        uint256 startBlock,
-        uint256 startNonce,
-        bool isMarked
-    ) {
+    function getInactivityRecord(address account)
+        external
+        view
+        returns (uint256 startBlock, uint256 startNonce, bool isMarked)
+    {
         if (testMode) {
             InheritanceManager.InactivityRecord memory record = inactivityRecords[account];
             return (record.startBlock, record.startNonce, record.isMarked);
@@ -422,11 +415,8 @@ contract InheritanceManagerTestHelper {
                 revert UnauthorizedCaller();
             }
 
-            inheritanceConfigs[account] = InheritanceManager.InheritanceConfig({
-                inheritor: address(0),
-                inactivityPeriod: 0,
-                isActive: false
-            });
+            inheritanceConfigs[account] =
+                InheritanceManager.InheritanceConfig({inheritor: address(0), inactivityPeriod: 0, isActive: false});
         } else {
             productionContract.revokeInheritance(account);
         }
@@ -435,12 +425,11 @@ contract InheritanceManagerTestHelper {
     /**
      * @dev Check if inheritance can be claimed (matches production contract signature)
      */
-    function canClaimInheritance(address account) external view returns (
-        bool canClaim,
-        uint256 blocksRemaining,
-        address inheritor,
-        bool isConfigured
-    ) {
+    function canClaimInheritance(address account)
+        external
+        view
+        returns (bool canClaim, uint256 blocksRemaining, address inheritor, bool isConfigured)
+    {
         if (testMode) {
             InheritanceManager.InheritanceConfig memory config = inheritanceConfigs[account];
             InheritanceManager.InactivityRecord memory record = inactivityRecords[account];
@@ -464,26 +453,27 @@ contract InheritanceManagerTestHelper {
      * @dev Get authorized signers mapping (for test compatibility)
      */
     mapping(address => address) public authorizedSigners;
-    
+
     // === INTERNAL HELPER FUNCTIONS ===
     // These expose the core business logic for testing
-    
-    function _markInactivityStartInternal(address account, uint256 blockNumber, uint256 nonce, uint256 balance) internal {
+
+    function _markInactivityStartInternal(address account, uint256 blockNumber, uint256 nonce, uint256 balance)
+        internal
+    {
         InheritanceManager.InheritanceConfig storage config = inheritanceConfigs[account];
         if (config.inheritor == address(0)) revert InheritanceNotConfigured();
         if (inheritanceClaimed[account]) revert InheritanceAlreadyClaimed();
 
         // Store inactivity data
-        inactivityRecords[account] = InheritanceManager.InactivityRecord({
-            startBlock: blockNumber,
-            startNonce: nonce,
-            isMarked: true
-        });
+        inactivityRecords[account] =
+            InheritanceManager.InactivityRecord({startBlock: blockNumber, startNonce: nonce, isMarked: true});
 
         emit InactivityMarked(account, blockNumber, nonce, balance);
     }
 
-    function _claimInheritanceInternalTestMode(address account, uint256 blockNumber, uint256 nonce, address caller) internal {
+    function _claimInheritanceInternalTestMode(address account, uint256 blockNumber, uint256 nonce, address caller)
+        internal
+    {
         InheritanceManager.InheritanceConfig storage config = inheritanceConfigs[account];
         InheritanceManager.InactivityRecord storage inactivity = inactivityRecords[account];
 
@@ -499,8 +489,6 @@ contract InheritanceManagerTestHelper {
         if (blockNumber < requiredBlock) {
             revert InactivityPeriodNotMet();
         }
-
-
 
         // Check account is still inactive (nonce unchanged)
         if (nonce != inactivity.startNonce) revert AccountStillActive();
