@@ -347,7 +347,7 @@ contract InheritanceManager {
         if (!verifyBlockHash(blockNumber, blockHash)) {
             revert InvalidBlockHash();
         }
-        StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
+        StateVerifier.AccountStateProof memory stateVerifierProof = StateVerifier.AccountStateProof({
             nonce: accountStateProof.nonce,
             balance: accountStateProof.balance,
             storageHash: accountStateProof.storageHash,
@@ -355,7 +355,7 @@ contract InheritanceManager {
             proof: accountStateProof.proof
         });
 
-        if (!StateVerifier.verifyAccountState(account, stateRoot, libProof)) {
+        if (!StateVerifier.verifyAccountState(account, stateRoot, stateVerifierProof)) {
             revert InvalidStateProof();
         }
     }
@@ -435,7 +435,7 @@ contract InheritanceManager {
         if (!verifyBlockHash(currentBlock, currentBlockHash)) {
             revert InvalidBlockHash();
         }
-        StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
+        StateVerifier.AccountStateProof memory stateVerifierProof = StateVerifier.AccountStateProof({
             nonce: currentAccountStateProof.nonce,
             balance: currentAccountStateProof.balance,
             storageHash: currentAccountStateProof.storageHash,
@@ -443,7 +443,7 @@ contract InheritanceManager {
             proof: currentAccountStateProof.proof
         });
 
-        if (!StateVerifier.verifyAccountState(account, stateRoot, libProof)) {
+        if (!StateVerifier.verifyAccountState(account, stateRoot, stateVerifierProof)) {
             revert InvalidStateProof();
         }
 
