@@ -208,8 +208,11 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata accountStateProof
     ) external {
-        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = _extractInactivityMarkingData(blockHeaderRLP);
-        _validateInactivityMarkingData(blockNumber, blockHash);
+        (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) = _extractBlockDataFromHeader(blockHeaderRLP);
+
+        bytes32 expectedBlockHash = blockhash(blockNumber);
+        require(expectedBlockHash != bytes32(0), "Block hash not available");
+        require(blockHash == expectedBlockHash, "Block header hash mismatch");
         _markInactivityStartWithProof(account, blockNumber, blockHash, stateRoot, accountStateProof);
     }
 
@@ -225,8 +228,11 @@ contract InheritanceManager {
         bytes calldata blockHeaderRLP,
         AccountStateProof calldata currentAccountStateProof
     ) external {
-        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = _extractInheritanceClaimData(blockHeaderRLP);
-        _validateInheritanceClaimData(currentBlock, currentBlockHash);
+        (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) = _extractBlockDataFromHeader(blockHeaderRLP);
+
+        bytes32 expectedBlockHash = blockhash(currentBlock);
+        require(expectedBlockHash != bytes32(0), "Block hash not available");
+        require(currentBlockHash == expectedBlockHash, "Block header hash mismatch");
         _claimInheritanceWithProof(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof);
     }
 
@@ -242,7 +248,11 @@ contract InheritanceManager {
         uint256 inactivityPeriod
     ) external {
         _validateInheritanceConfig(account, inheritor, inactivityPeriod);
-        InheritanceConfig memory config = _prepareInheritanceConfig(account, inheritor, inactivityPeriod);
+        InheritanceConfig memory config = InheritanceConfig({
+            inheritor: inheritor,
+            inactivityPeriod: inactivityPeriod,
+            isActive: true
+        });
         inheritanceConfigs[account] = config;
 
         emit InheritanceConfigured(account, inheritor, inactivityPeriod);
@@ -347,22 +357,7 @@ contract InheritanceManager {
         blockHash = keccak256(blockHeaderRLP);
     }
 
-    /**
-     * @dev Validate block header data against on-chain block hash
-     * @param blockNumber The block number to validate
-     * @param blockHash The computed hash of the block header
-     *
-     * This function only performs validation without any data extraction.
-     * Use _extractBlockDataFromHeader() to extract data first.
-     */
-    function _validateBlockHeader(
-        uint256 blockNumber,
-        bytes32 blockHash
-    ) internal view {
-        bytes32 expectedBlockHash = blockhash(blockNumber);
-        require(expectedBlockHash != bytes32(0), "Block hash not available");
-        require(blockHash == expectedBlockHash, "Block header hash mismatch");
-    }
+
 
     /**
      * @dev Decode block number and state root from RLP-encoded block header
@@ -511,80 +506,20 @@ contract InheritanceManager {
         return itemOffset + length;
     }
 
-    /**
-     * @dev Extract and prepare data for marking inactivity start
-     * @param blockHeaderRLP The complete RLP-encoded block header
-     * @return blockNumber The extracted block number
-     * @return stateRoot The extracted state root
-     * @return blockHash The computed block hash
-     */
-    function _extractInactivityMarkingData(
-        bytes calldata blockHeaderRLP
-    ) internal pure returns (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) {
-        return _extractBlockDataFromHeader(blockHeaderRLP);
-    }
 
-    /**
-     * @dev Validate data for marking inactivity start
-     * @param blockNumber The block number to validate
-     * @param blockHash The block hash to validate
-     */
-    function _validateInactivityMarkingData(
-        uint256 blockNumber,
-        bytes32 blockHash
-    ) internal view {
-        _validateBlockHeader(blockNumber, blockHash);
 
-        // Additional validation specific to inactivity marking
-        require(blockHash != bytes32(0), "Block hash not available");
-    }
 
-    /**
-     * @dev Extract and prepare data for claiming inheritance
-     * @param blockHeaderRLP The complete RLP-encoded block header
-     * @return currentBlock The extracted current block number
-     * @return stateRoot The extracted state root
-     * @return currentBlockHash The computed current block hash
-     */
-    function _extractInheritanceClaimData(
-        bytes calldata blockHeaderRLP
-    ) internal pure returns (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) {
-        return _extractBlockDataFromHeader(blockHeaderRLP);
-    }
+
+
 
     /**
      * @dev Validate data for claiming inheritance
      * @param currentBlock The current block number to validate
      * @param currentBlockHash The current block hash to validate
      */
-    function _validateInheritanceClaimData(
-        uint256 currentBlock,
-        bytes32 currentBlockHash
-    ) internal view {
-        _validateBlockHeader(currentBlock, currentBlockHash);
 
 
-        require(currentBlockHash != bytes32(0), "Block hash not available");
-    }
 
-    /**
-     * @dev Prepare inheritance configuration data
-     * @param account The account to configure inheritance for
-     * @param inheritor The address that will inherit the account
-     * @param inactivityPeriod How long the account must be inactive (in blocks)
-     * @return config The prepared inheritance configuration
-     */
-    function _prepareInheritanceConfig(
-        address account,
-        address inheritor,
-        uint256 inactivityPeriod
-    ) internal pure returns (InheritanceConfig memory config) {
-        config = InheritanceConfig({
-            inheritor: inheritor,
-            inactivityPeriod: inactivityPeriod,
-            isActive: true
-        });
-    }
 
     /**
      * @dev Validate inheritance configuration parameters
@@ -611,16 +546,7 @@ contract InheritanceManager {
         }
     }
     
-    /**
-     * @dev Extract data for marking inactivity start
-     * @param account The account to mark as inactive
-     * @return config The inheritance configuration for the account
-     */
-    function _extractInactivityStartData(
-        address account
-    ) internal view returns (InheritanceConfig memory config) {
-        config = inheritanceConfigs[account];
-    }
+
 
     /**
      * @dev Validate data for marking inactivity start
@@ -674,7 +600,7 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory accountStateProof
     ) internal {
-        InheritanceConfig memory config = _extractInactivityStartData(account);
+        InheritanceConfig memory config = inheritanceConfigs[account];
         _validateInactivityStartData(account, blockNumber, blockHash, stateRoot, accountStateProof, config);
         inactivityRecords[account] = InactivityRecord({
             startBlock: blockNumber,
@@ -687,18 +613,7 @@ contract InheritanceManager {
     
     // --- Inheritance Claiming ---
     
-    /**
-     * @dev Extract data for claiming inheritance
-     * @param account The account to claim inheritance for
-     * @return config The inheritance configuration for the account
-     * @return record The inactivity record for the account
-     */
-    function _extractInheritanceClaimingData(
-        address account
-    ) internal view returns (InheritanceConfig memory config, InactivityRecord memory record) {
-        config = inheritanceConfigs[account];
-        record = inactivityRecords[account];
-    }
+
 
     /**
      * @dev Validate data for claiming inheritance
@@ -782,7 +697,8 @@ contract InheritanceManager {
         bytes32 stateRoot,
         AccountStateProof memory currentAccountStateProof
     ) internal {
-        (InheritanceConfig memory config, InactivityRecord memory record) = _extractInheritanceClaimingData(account);
+        InheritanceConfig memory config = inheritanceConfigs[account];
+        InactivityRecord memory record = inactivityRecords[account];
         _validateInheritanceClaimingData(account, currentBlock, currentBlockHash, stateRoot, currentAccountStateProof, config, record);
         inheritanceClaimed[account] = true;
 
