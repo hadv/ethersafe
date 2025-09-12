@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "../src/libraries/EthereumStateVerification.sol";
 import "./helpers/InheritanceManagerTestHelper.sol";
 import "./helpers/StateProofHelper.sol";
 
@@ -30,7 +31,7 @@ contract StateProofVerificationTest is Test {
 
     function testVerifyAccountStateWithValidProof() public {
         // Create a real account state
-        InheritanceManager.AccountStateProof memory targetState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory targetState = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("storage_root"),
@@ -43,15 +44,15 @@ contract StateProofVerificationTest is Test {
         otherAccounts[0] = address(0x3);
         otherAccounts[1] = address(0x4);
 
-        InheritanceManager.AccountStateProof[] memory otherStates = new InheritanceManager.AccountStateProof[](2);
-        otherStates[0] = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof[] memory otherStates = new StateVerifier.AccountStateProof[](2);
+        otherStates[0] = StateVerifier.AccountStateProof({
             nonce: 10,
             balance: 1 ether,
             storageHash: keccak256("other_storage_1"),
             codeHash: keccak256("other_code_1"),
             proof: new bytes32[](0)
         });
-        otherStates[1] = InheritanceManager.AccountStateProof({
+        otherStates[1] = StateVerifier.AccountStateProof({
             nonce: 20,
             balance: 2 ether,
             storageHash: keccak256("other_storage_2"),
@@ -76,7 +77,7 @@ contract StateProofVerificationTest is Test {
         bytes32[] memory invalidProof = new bytes32[](1);
         invalidProof[0] = keccak256("invalid_proof");
 
-        InheritanceManager.AccountStateProof memory invalidStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory invalidStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("storage_root"),
@@ -128,7 +129,7 @@ contract StateProofVerificationTest is Test {
         inheritanceManager.configureInheritance(accountOwner, inheritor, INACTIVITY_PERIOD);
 
         // Create real state proof for marking inactivity
-        InheritanceManager.AccountStateProof memory initialState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory initialState = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("storage_root"),
@@ -140,8 +141,8 @@ contract StateProofVerificationTest is Test {
         address[] memory otherAccounts = new address[](1);
         otherAccounts[0] = address(0x3);
 
-        InheritanceManager.AccountStateProof[] memory otherStates = new InheritanceManager.AccountStateProof[](1);
-        otherStates[0] = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof[] memory otherStates = new StateVerifier.AccountStateProof[](1);
+        otherStates[0] = StateVerifier.AccountStateProof({
             nonce: 10,
             balance: 1 ether,
             storageHash: keccak256("other_storage"),
@@ -172,7 +173,7 @@ contract StateProofVerificationTest is Test {
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
 
         // Create state proof showing account is still inactive (same nonce)
-        InheritanceManager.AccountStateProof memory currentState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory currentState = StateVerifier.AccountStateProof({
             nonce: 42, // Same nonce (inactive)
             balance: 5 ether, // Balance can change, but nonce is what matters
             storageHash: keccak256("storage_root"),
@@ -210,7 +211,7 @@ contract StateProofVerificationTest is Test {
         bytes32[] memory mockProof = new bytes32[](1);
         mockProof[0] = keccak256("mock_proof");
 
-        InheritanceManager.AccountStateProof memory initialStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory initialStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("mock_storage"),
@@ -232,7 +233,7 @@ contract StateProofVerificationTest is Test {
         uint256 claimBlock = TEST_BLOCK + 100 + INACTIVITY_PERIOD + 1;
 
         // Create state proof showing account became active (different nonce)
-        InheritanceManager.AccountStateProof memory activeStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory activeStateProof = StateVerifier.AccountStateProof({
             nonce: 43, // Different nonce (account became active)
             balance: 5 ether,
             storageHash: keccak256("mock_storage"),
@@ -259,7 +260,7 @@ contract StateProofVerificationTest is Test {
         bytes32[] memory invalidProof = new bytes32[](1);
         invalidProof[0] = keccak256("invalid_proof");
 
-        InheritanceManager.AccountStateProof memory invalidStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory invalidStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("invalid_storage"),
@@ -289,7 +290,7 @@ contract StateProofVerificationTest is Test {
         bytes32[] memory mockProof = new bytes32[](1);
         mockProof[0] = keccak256("mock_proof");
 
-        InheritanceManager.AccountStateProof memory validStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory validStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256("mock_storage"),

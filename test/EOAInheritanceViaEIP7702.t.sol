@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "../src/libraries/EthereumStateVerification.sol";
 import "./helpers/InheritanceManagerTestHelper.sol";
 import "../examples/EOAInheritanceViaEIP7702.sol";
 import "./helpers/StateProofHelper.sol";
@@ -62,7 +63,7 @@ contract EOAInheritanceViaEIP7702Test is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(blockNumber);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(blockNumber, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 10 ether,
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),
@@ -80,7 +81,7 @@ contract EOAInheritanceViaEIP7702Test is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 42, // same nonce (inactive)
             balance: 10 ether, // same balance (inactive)
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),
@@ -271,7 +272,7 @@ contract EOAInheritanceViaEIP7702Test is Test {
         uint256 testNonce = 42;
         uint256 testBalance = 10 ether;
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: testNonce,
             balance: testBalance,
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),
@@ -287,7 +288,7 @@ contract EOAInheritanceViaEIP7702Test is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: testNonce, // same nonce (inactive)
             balance: testBalance, // same balance (inactive)
             storageHash: keccak256(abi.encodePacked("storage", eoaAccount)),

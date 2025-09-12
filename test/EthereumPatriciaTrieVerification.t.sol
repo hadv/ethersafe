@@ -32,7 +32,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
      */
     function testPatriciaTrieVerificationSingleAccount() public {
         // Create account state
-        InheritanceManager.AccountStateProof memory accountState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountState = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 1.5 ether,
             storageHash: keccak256("test_storage"),
@@ -72,7 +72,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
      */
     function testBinaryMerkleVerificationFallback() public {
         // Create account state
-        InheritanceManager.AccountStateProof memory targetState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory targetState = StateVerifier.AccountStateProof({
             nonce: 100,
             balance: 2 ether,
             storageHash: keccak256("storage"),
@@ -82,7 +82,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
 
         // Generate binary Merkle proof using existing helper
         (bytes32 stateRoot, bytes32[] memory proof) = stateProofHelper.generateSingleStateProof(
-            testAccount, targetState, new address[](0), new InheritanceManager.AccountStateProof[](0)
+            testAccount, targetState, new address[](0), new StateVerifier.AccountStateProof[](0)
         );
         targetState.proof = proof;
 
@@ -104,7 +104,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
      */
     function testMainVerificationUsesPatriciaTrie() public {
         // Create account state
-        InheritanceManager.AccountStateProof memory accountState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountState = StateVerifier.AccountStateProof({
             nonce: 50,
             balance: 0.5 ether,
             storageHash: keccak256("minimal_storage"),
@@ -147,15 +147,15 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         accounts[0] = testAccount;
         accounts[1] = inheritor;
 
-        InheritanceManager.AccountStateProof[] memory accountStates = new InheritanceManager.AccountStateProof[](2);
-        accountStates[0] = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof[] memory accountStates = new StateVerifier.AccountStateProof[](2);
+        accountStates[0] = StateVerifier.AccountStateProof({
             nonce: 10,
             balance: 1 ether,
             storageHash: keccak256("storage1"),
             codeHash: keccak256("code1"),
             proof: new bytes32[](0)
         });
-        accountStates[1] = InheritanceManager.AccountStateProof({
+        accountStates[1] = StateVerifier.AccountStateProof({
             nonce: 20,
             balance: 2 ether,
             storageHash: keccak256("storage2"),
@@ -217,7 +217,7 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(testBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(testBlock, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory targetState = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory targetState = StateVerifier.AccountStateProof({
             nonce: 100,
             balance: 1 ether,
             storageHash: keccak256(abi.encodePacked("storage", testAccount)),

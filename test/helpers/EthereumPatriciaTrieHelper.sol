@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../../src/InheritanceManager.sol";
+import "../../src/libraries/EthereumStateVerification.sol";
 import "solady/utils/LibRLP.sol";
 
 /**
@@ -17,7 +18,7 @@ contract EthereumPatriciaTrieHelper {
      * @return stateRoot The Patricia Trie root
      * @return proof The Patricia Trie proof nodes
      */
-    function generateEthereumAccountProof(address account, InheritanceManager.AccountStateProof memory accountState)
+    function generateEthereumAccountProof(address account, StateVerifier.AccountStateProof memory accountState)
         external
         pure
         returns (bytes32 stateRoot, bytes[] memory proof)
@@ -55,7 +56,7 @@ contract EthereumPatriciaTrieHelper {
      */
     function generateMultiAccountProofs(
         address[] memory accounts,
-        InheritanceManager.AccountStateProof[] memory accountStates
+        StateVerifier.AccountStateProof[] memory accountStates
     ) external view returns (bytes32 stateRoot, bytes[][] memory proofs) {
         require(accounts.length == accountStates.length, "Array length mismatch");
 
@@ -107,7 +108,7 @@ contract EthereumPatriciaTrieHelper {
      * @param accountState The account state to encode
      * @return Encoded account state
      */
-    function _encodeAccountState(InheritanceManager.AccountStateProof memory accountState)
+    function _encodeAccountState(StateVerifier.AccountStateProof memory accountState)
         internal
         pure
         returns (bytes memory)

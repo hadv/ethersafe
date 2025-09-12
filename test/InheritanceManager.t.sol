@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "../src/libraries/EthereumStateVerification.sol";
 import "./helpers/InheritanceManagerTestHelper.sol";
 import "./helpers/StateProofHelper.sol";
 
@@ -121,7 +122,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(targetBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(targetBlock, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: startNonce,
             balance: startBalance,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -149,7 +150,7 @@ contract InheritanceManagerTest is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: startNonce, // Same nonce (inactive)
             balance: newBalance, // Updated balance
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -181,7 +182,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(inactivityBlock);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(inactivityBlock, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -204,7 +205,7 @@ contract InheritanceManagerTest is Test {
         bytes32 claimStateRoot = inheritanceManager.createTestStateRoot(claimBlockNumber);
         bytes memory claimBlockHeaderRLP = inheritanceManager.createTestBlockHeader(claimBlockNumber, claimStateRoot);
 
-        InheritanceManager.AccountStateProof memory claimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory claimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 42, // same nonce (inactive)
             balance: 5 ether, // same balance (inactive)
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -247,7 +248,7 @@ contract InheritanceManagerTest is Test {
         // Test what caller is received in claimInheritanceWithProof
         vm.prank(inheritor);
         bytes memory dummyHeader = hex"00";
-        InheritanceManager.AccountStateProof memory dummyProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory dummyProof = StateVerifier.AccountStateProof({
             nonce: 0,
             balance: 0,
             storageHash: bytes32(0),
@@ -305,7 +306,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -323,7 +324,7 @@ contract InheritanceManagerTest is Test {
         bytes memory earlyClaimBlockHeaderRLP =
             inheritanceManager.createTestBlockHeader(earlyClaimBlockNumber, earlyClaimStateRoot);
 
-        InheritanceManager.AccountStateProof memory earlyClaimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory earlyClaimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -348,7 +349,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -366,7 +367,7 @@ contract InheritanceManagerTest is Test {
         bytes memory activeClaimBlockHeaderRLP =
             inheritanceManager.createTestBlockHeader(activeClaimBlockNumber, activeClaimStateRoot);
 
-        InheritanceManager.AccountStateProof memory activeClaimAccountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory activeClaimAccountStateProof = StateVerifier.AccountStateProof({
             nonce: 43, // different nonce (account became active)
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
@@ -400,7 +401,7 @@ contract InheritanceManagerTest is Test {
         bytes32 testStateRoot = inheritanceManager.createTestStateRoot(TEST_BLOCK + 100);
         bytes memory blockHeaderRLP = inheritanceManager.createTestBlockHeader(TEST_BLOCK + 100, testStateRoot);
 
-        InheritanceManager.AccountStateProof memory accountStateProof = InheritanceManager.AccountStateProof({
+        StateVerifier.AccountStateProof memory accountStateProof = StateVerifier.AccountStateProof({
             nonce: 42,
             balance: 5 ether,
             storageHash: keccak256(abi.encodePacked("storage", accountOwner)),
