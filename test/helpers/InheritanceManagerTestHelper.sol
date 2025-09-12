@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import "../../src/InheritanceManager.sol";
+import "../../src/libraries/EthereumStateVerification.sol";
 
 /**
  * @title InheritanceManagerTestHelper
@@ -51,7 +52,7 @@ contract InheritanceManagerTestHelper {
     function markInactivityStartWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata accountStateProof
+        StateVerifier.AccountStateProof calldata accountStateProof
     ) external {
         if (testMode) {
             _markInactivityStartTestMode(account, blockHeaderRLP, accountStateProof);
@@ -67,7 +68,7 @@ contract InheritanceManagerTestHelper {
     function claimInheritanceWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof
+        StateVerifier.AccountStateProof calldata currentAccountStateProof
     ) external {
         if (testMode) {
             _claimInheritanceTestMode(account, blockHeaderRLP, currentAccountStateProof, msg.sender);
@@ -84,7 +85,7 @@ contract InheritanceManagerTestHelper {
     function _markInactivityStartTestMode(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata accountStateProof
+        StateVerifier.AccountStateProof calldata accountStateProof
     ) internal {
         // Extract block number and state root using test-friendly parsing
         (uint256 blockNumber, bytes32 stateRoot) = _parseTestBlockHeader(blockHeaderRLP);
@@ -103,7 +104,7 @@ contract InheritanceManagerTestHelper {
     function _claimInheritanceTestMode(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof,
+        StateVerifier.AccountStateProof calldata currentAccountStateProof,
         address caller
     ) internal {
         // Extract block number and state root using test-friendly parsing
@@ -159,7 +160,7 @@ contract InheritanceManagerTestHelper {
     function _verifyTestAccountState(
         address account,
         bytes32 stateRoot,
-        InheritanceManager.AccountStateProof memory accountStateProof
+        StateVerifier.AccountStateProof memory accountStateProof
     ) internal pure returns (bool) {
         // Check for obviously invalid proofs first
         bytes32 invalidProofMarker = keccak256("invalid_proof");
@@ -254,7 +255,7 @@ contract InheritanceManagerTestHelper {
     function debugClaimInheritanceWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        InheritanceManager.AccountStateProof calldata currentAccountStateProof
+        StateVerifier.AccountStateProof calldata currentAccountStateProof
     ) external returns (address) {
         // Return the caller that would be passed to _claimInheritanceTestMode
         return msg.sender;
@@ -320,7 +321,7 @@ contract InheritanceManagerTestHelper {
     function verifyAccountState(
         address account,
         bytes32 stateRoot,
-        InheritanceManager.AccountStateProof memory accountStateProof
+        StateVerifier.AccountStateProof memory accountStateProof
     ) public pure returns (bool isValid) {
         // Simplified verification for testing
         // Check that proof is not empty and has reasonable structure

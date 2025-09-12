@@ -56,17 +56,7 @@ contract InheritanceManager {
         bool isMarked; // Whether inactivity has been marked
     }
 
-    /**
-     * @dev Account state proof structure for Merkle verification
-     * This represents the account state that needs to be proven
-     */
-    struct AccountStateProof {
-        uint256 nonce; // Account nonce
-        uint256 balance; // Account balance
-        bytes32 storageHash; // Storage trie root hash
-        bytes32 codeHash; // Code hash
-        bytes32[] proof; // Merkle proof path
-    }
+
 
     // --- State Variables ---
 
@@ -126,7 +116,7 @@ contract InheritanceManager {
     function markInactivityStartWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        AccountStateProof calldata accountStateProof
+        StateVerifier.AccountStateProof calldata accountStateProof
     ) external {
         (uint256 blockNumber, bytes32 stateRoot, bytes32 blockHash) =
             StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
@@ -147,7 +137,7 @@ contract InheritanceManager {
     function claimInheritanceWithProof(
         address account,
         bytes calldata blockHeaderRLP,
-        AccountStateProof calldata currentAccountStateProof
+        StateVerifier.AccountStateProof calldata currentAccountStateProof
     ) external {
         (uint256 currentBlock, bytes32 stateRoot, bytes32 currentBlockHash) =
             StateVerifier.extractBlockDataFromHeader(blockHeaderRLP);
@@ -311,7 +301,7 @@ contract InheritanceManager {
         uint256 blockNumber,
         bytes32 blockHash,
         bytes32 stateRoot,
-        AccountStateProof memory accountStateProof,
+        StateVerifier.AccountStateProof memory accountStateProof,
         InheritanceConfig memory config
     ) internal view {
         if (!config.isActive) {
@@ -321,15 +311,7 @@ contract InheritanceManager {
         if (!verifyBlockHash(blockNumber, blockHash)) {
             revert InvalidBlockHash();
         }
-        StateVerifier.AccountStateProof memory stateVerifierProof = StateVerifier.AccountStateProof({
-            nonce: accountStateProof.nonce,
-            balance: accountStateProof.balance,
-            storageHash: accountStateProof.storageHash,
-            codeHash: accountStateProof.codeHash,
-            proof: accountStateProof.proof
-        });
-
-        if (!StateVerifier.verifyAccountState(account, stateRoot, stateVerifierProof)) {
+        if (!StateVerifier.verifyAccountState(account, stateRoot, accountStateProof)) {
             revert InvalidStateProof();
         }
     }
@@ -347,7 +329,7 @@ contract InheritanceManager {
         uint256 blockNumber,
         bytes32 blockHash,
         bytes32 stateRoot,
-        AccountStateProof memory accountStateProof
+        StateVerifier.AccountStateProof memory accountStateProof
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
         _validateInactivityStartData(account, blockNumber, blockHash, stateRoot, accountStateProof, config);
@@ -374,7 +356,7 @@ contract InheritanceManager {
         uint256 currentBlock,
         bytes32 currentBlockHash,
         bytes32 stateRoot,
-        AccountStateProof memory currentAccountStateProof,
+        StateVerifier.AccountStateProof memory currentAccountStateProof,
         InheritanceConfig memory config,
         InactivityRecord memory record
     ) internal view {
@@ -402,15 +384,7 @@ contract InheritanceManager {
         if (!verifyBlockHash(currentBlock, currentBlockHash)) {
             revert InvalidBlockHash();
         }
-        StateVerifier.AccountStateProof memory stateVerifierProof = StateVerifier.AccountStateProof({
-            nonce: currentAccountStateProof.nonce,
-            balance: currentAccountStateProof.balance,
-            storageHash: currentAccountStateProof.storageHash,
-            codeHash: currentAccountStateProof.codeHash,
-            proof: currentAccountStateProof.proof
-        });
-
-        if (!StateVerifier.verifyAccountState(account, stateRoot, stateVerifierProof)) {
+        if (!StateVerifier.verifyAccountState(account, stateRoot, currentAccountStateProof)) {
             revert InvalidStateProof();
         }
 
@@ -435,7 +409,7 @@ contract InheritanceManager {
         uint256 currentBlock,
         bytes32 currentBlockHash,
         bytes32 stateRoot,
-        AccountStateProof memory currentAccountStateProof
+        StateVerifier.AccountStateProof memory currentAccountStateProof
     ) internal {
         InheritanceConfig memory config = inheritanceConfigs[account];
         InactivityRecord memory record = inactivityRecords[account];

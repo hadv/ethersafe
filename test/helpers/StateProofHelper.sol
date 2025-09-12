@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../../src/InheritanceManager.sol";
+import "../../src/libraries/EthereumStateVerification.sol";
 import "solady/utils/MerkleProofLib.sol";
 
 /**
@@ -243,7 +244,7 @@ contract StateProofHelper {
      * @return stateRoot The generated state root
      * @return proofs Array of Merkle proofs for each account
      */
-    function generateStateProofs(address[] memory accounts, InheritanceManager.AccountStateProof[] memory accountStates)
+    function generateStateProofs(address[] memory accounts, StateVerifier.AccountStateProof[] memory accountStates)
         external
         pure
         returns (bytes32 stateRoot, bytes32[][] memory proofs)
@@ -253,7 +254,7 @@ contract StateProofHelper {
 
     function _generateStateProofsInternal(
         address[] memory accounts,
-        InheritanceManager.AccountStateProof[] memory accountStates
+        StateVerifier.AccountStateProof[] memory accountStates
     ) internal pure returns (bytes32 stateRoot, bytes32[][] memory proofs) {
         require(accounts.length == accountStates.length, "Array length mismatch");
 
@@ -279,14 +280,14 @@ contract StateProofHelper {
      */
     function generateSingleStateProof(
         address targetAccount,
-        InheritanceManager.AccountStateProof memory targetState,
+        StateVerifier.AccountStateProof memory targetState,
         address[] memory otherAccounts,
-        InheritanceManager.AccountStateProof[] memory otherStates
+        StateVerifier.AccountStateProof[] memory otherStates
     ) external pure returns (bytes32 stateRoot, bytes32[] memory proof) {
         // Combine target with other accounts
         address[] memory allAccounts = new address[](otherAccounts.length + 1);
-        InheritanceManager.AccountStateProof[] memory allStates =
-            new InheritanceManager.AccountStateProof[](otherStates.length + 1);
+        StateVerifier.AccountStateProof[] memory allStates =
+            new StateVerifier.AccountStateProof[](otherStates.length + 1);
 
         allAccounts[0] = targetAccount;
         allStates[0] = targetState;
@@ -304,7 +305,7 @@ contract StateProofHelper {
     /**
      * @dev Create account leaf hash according to Ethereum's state trie format
      */
-    function _createAccountLeaf(address account, InheritanceManager.AccountStateProof memory accountState)
+    function _createAccountLeaf(address account, StateVerifier.AccountStateProof memory accountState)
         internal
         pure
         returns (bytes32)
