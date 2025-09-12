@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 // Optimized libraries for gas efficiency and battle-tested reliability
 import "solady/utils/MerkleProofLib.sol";
-import "solady/utils/LibRLP.sol";
+
 import "solady/utils/ECDSA.sol";
 import "solady/utils/SignatureCheckerLib.sol";
 import "solady/utils/LibString.sol";
@@ -25,7 +25,7 @@ using StateVerifier for StateVerifier.AccountStateProof;
  *
  * OPTIMIZATIONS:
  * - Uses gas-optimized Solady MerkleProofLib instead of OpenZeppelin MerkleProof (~10-15% gas savings)
- * - Uses battle-tested Solady LibRLP for RLP encoding instead of custom implementation (~15-25% gas savings)
+ * - Uses battle-tested hamdiallam/Solidity-RLP for RLP decoding instead of custom implementation (~15-25% gas savings)
  * - Includes ECDSA and SignatureCheckerLib for future signature verification features
  * - Reduced codebase by ~100+ lines while improving reliability and performance
  *
@@ -141,36 +141,6 @@ contract InheritanceManager {
      */
 
 
-    /**
-     * @dev Extract and verify state root from RLP-encoded block header
-     * @param blockHeaderRLP The complete RLP-encoded block header
-     * @return blockNumber The block number extracted from the header
-     * @return stateRoot The extracted state root from the header
-     *
-     * This function:
-     * 1. Extracts block data from RLP header
-     * 2. Validates the block header against on-chain block hash
-     * 3. Returns both the block number and verified state root
-     *
-     * SECURITY: This is cryptographically secure because:
-     * - Block number is extracted from the header itself (trustless)
-     * - Uses Solidity's blockhash() for trustless verification
-     * - Block hash verification ensures header authenticity
-     * - RLP decoding follows Ethereum's exact specification
-     * - State root is extracted from the verified header
-     * - No external dependencies or oracles required
-     */
-    function extractStateRootFromHeader(
-        bytes calldata blockHeaderRLP
-    ) public view returns (uint256 blockNumber, bytes32 stateRoot) {
-        blockNumber = StateVerifier._extractBlockNumberFromRLP(blockHeaderRLP);
-        StateVerifier.BlockHeader memory header = StateVerifier.verifyAndDecodeBlockHeader(
-            blockNumber,
-            blockHeaderRLP
-        );
-
-        stateRoot = header.stateRoot;
-    }
 
 
 
@@ -340,14 +310,6 @@ contract InheritanceManager {
 
     // --- Internal/Private Functions ---
 
-
-
-
-
-
-
-
-
     /**
      * @dev Verify a signature for authorization (supports both EOA and contract signatures)
      * @param hash The hash that was signed
@@ -378,23 +340,11 @@ contract InheritanceManager {
         return ECDSA.recover(hash, signature);
     }
 
-
-
-
-
-
-
-
-
     /**
      * @dev Validate data for claiming inheritance
      * @param currentBlock The current block number to validate
      * @param currentBlockHash The current block hash to validate
      */
-
-
-
-
     /**
      * @dev Validate inheritance configuration parameters
      * @param account The account to configure inheritance for
@@ -419,8 +369,6 @@ contract InheritanceManager {
             revert InvalidPeriod();
         }
     }
-    
-
 
     /**
      * @dev Validate data for marking inactivity start
@@ -484,10 +432,8 @@ contract InheritanceManager {
 
         emit InactivityMarked(account, blockNumber, accountStateProof.nonce, accountStateProof.balance);
     }
-    
-    // --- Inheritance Claiming ---
-    
 
+    // --- Inheritance Claiming ---
 
     /**
      * @dev Validate data for claiming inheritance
