@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/InheritanceManager.sol";
+import "../src/libraries/EthereumStateVerification.sol";
 import "./helpers/StateProofHelper.sol";
 import "./helpers/EthereumPatriciaTrieHelper.sol";
 
@@ -51,8 +52,16 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         }
         accountState.proof = proof32;
 
-        // Test Patricia Trie verification
-        bool result = inheritanceManager.verifyAccountStateWithPatriciaTrie(testAccount, stateRoot, accountState);
+        // Test Patricia Trie verification using library directly
+        StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
+            nonce: accountState.nonce,
+            balance: accountState.balance,
+            storageHash: accountState.storageHash,
+            codeHash: accountState.codeHash,
+            proof: accountState.proof
+        });
+
+        bool result = StateVerifier.verifyAccountStateWithPatriciaTrie(testAccount, stateRoot, libProof);
         
         // Note: This might fail initially because our helper generates simplified proofs
         // The test demonstrates the integration structure
@@ -81,8 +90,16 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         );
         targetState.proof = proof;
 
-        // Test binary Merkle verification (should work)
-        bool result = inheritanceManager.verifyAccountStateWithBinaryMerkle(testAccount, stateRoot, targetState);
+        // Test binary Merkle verification (should work) using library directly
+        StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
+            nonce: targetState.nonce,
+            balance: targetState.balance,
+            storageHash: targetState.storageHash,
+            codeHash: targetState.codeHash,
+            proof: targetState.proof
+        });
+
+        bool result = StateVerifier.verifyAccountStateWithBinaryMerkle(testAccount, stateRoot, libProof);
         assertTrue(result, "Binary Merkle verification should work");
     }
 
@@ -112,8 +129,16 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         }
         accountState.proof = proof32;
 
-        // Test main verification method (should use Patricia Trie internally)
-        bool result = inheritanceManager.verifyAccountState(testAccount, stateRoot, accountState);
+        // Test main verification method using library directly
+        StateVerifier.AccountStateProof memory libProof = StateVerifier.AccountStateProof({
+            nonce: accountState.nonce,
+            balance: accountState.balance,
+            storageHash: accountState.storageHash,
+            codeHash: accountState.codeHash,
+            proof: accountState.proof
+        });
+
+        bool result = StateVerifier.verifyAccountState(testAccount, stateRoot, libProof);
         
         console.log("Main verification (Patricia Trie) result:", result);
         // Note: May fail with simplified proof, but demonstrates the integration
@@ -157,7 +182,15 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         }
         accountStates[0].proof = proof1_32;
 
-        bool result1 = inheritanceManager.verifyAccountStateWithPatriciaTrie(accounts[0], stateRoot, accountStates[0]);
+        StateVerifier.AccountStateProof memory libProof1 = StateVerifier.AccountStateProof({
+            nonce: accountStates[0].nonce,
+            balance: accountStates[0].balance,
+            storageHash: accountStates[0].storageHash,
+            codeHash: accountStates[0].codeHash,
+            proof: accountStates[0].proof
+        });
+
+        bool result1 = StateVerifier.verifyAccountStateWithPatriciaTrie(accounts[0], stateRoot, libProof1);
         console.log("Multi-account verification (account 1):", result1);
 
         // Test verification for second account
@@ -167,7 +200,15 @@ contract EthereumPatriciaTrieVerificationTest is Test {
         }
         accountStates[1].proof = proof2_32;
 
-        bool result2 = inheritanceManager.verifyAccountStateWithPatriciaTrie(accounts[1], stateRoot, accountStates[1]);
+        StateVerifier.AccountStateProof memory libProof2 = StateVerifier.AccountStateProof({
+            nonce: accountStates[1].nonce,
+            balance: accountStates[1].balance,
+            storageHash: accountStates[1].storageHash,
+            codeHash: accountStates[1].codeHash,
+            proof: accountStates[1].proof
+        });
+
+        bool result2 = StateVerifier.verifyAccountStateWithPatriciaTrie(accounts[1], stateRoot, libProof2);
         console.log("Multi-account verification (account 2):", result2);
     }
 
