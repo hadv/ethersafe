@@ -5,7 +5,7 @@ import "solady/utils/LibRLP.sol";
 import "solady/utils/MerkleProofLib.sol";
 import "solidity-merkle-trees/MerklePatricia.sol";
 import "solidity-merkle-trees/Types.sol";
-import {RLPReader as BattleTestedRLP} from "solidity-rlp/RLPReader.sol";
+import {RLPReader as RLP} from "solidity-rlp/RLPReader.sol";
 
 /**
  * @title EthereumStateVerification
@@ -26,8 +26,8 @@ import {RLPReader as BattleTestedRLP} from "solidity-rlp/RLPReader.sol";
  */
 library StateVerifier {
     using LibRLP for bytes;
-    using BattleTestedRLP for bytes;
-    using BattleTestedRLP for BattleTestedRLP.RLPItem;
+    using RLP for bytes;
+    using RLP for RLP.RLPItem;
 
     /*//////////////////////////////////////////////////////////////
                                 STRUCTS
@@ -121,7 +121,7 @@ library StateVerifier {
         // 10: gasUsed, 11: timestamp, 12: extraData, 13: mixHash, 14: nonce, ...
 
         // Use battle-tested RLPReader library
-        BattleTestedRLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
+        RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
 
         // Ensure we have enough fields
         if (headerItems.length < 4) {
@@ -148,7 +148,7 @@ library StateVerifier {
      */
     function _extractBlockNumberFromRLP(bytes memory blockHeaderRLP) external pure returns (uint256 blockNumber) {
         // Use battle-tested RLPReader library
-        BattleTestedRLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
+        RLP.RLPItem[] memory headerItems = blockHeaderRLP.toRlpItem().toList();
 
         // Ensure we have enough fields (block number is at index 8)
         if (headerItems.length < 9) {
