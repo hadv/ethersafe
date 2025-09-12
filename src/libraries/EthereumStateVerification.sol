@@ -49,17 +49,7 @@ library StateVerifier {
         bytes32[] proof;
     }
 
-    /**
-     * @dev Ethereum block header structure (simplified)
-     * @param stateRoot Root hash of the state trie
-     * @param blockNumber Block number
-     * @param blockHash Hash of the block header
-     */
-    struct BlockHeader {
-        bytes32 stateRoot;
-        uint256 blockNumber;
-        bytes32 blockHash;
-    }
+
 
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
@@ -75,38 +65,7 @@ library StateVerifier {
                         BLOCK HEADER VERIFICATION
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Verify and decode an Ethereum block header
-     * @dev Inspired by Aragon EVM Storage Proofs implementation
-     * @param blockNumber The block number to verify
-     * @param blockHeaderRLP RLP-encoded block header
-     * @return header Decoded block header information
-     */
-    function verifyAndDecodeBlockHeader(
-        uint256 blockNumber,
-        bytes memory blockHeaderRLP
-    ) external view returns (BlockHeader memory header) {
-        // Verify the block hash matches the provided RLP
-        bytes32 computedHash = keccak256(blockHeaderRLP);
-        bytes32 expectedHash = blockhash(blockNumber);
-        
-        if (expectedHash == bytes32(0)) {
-            revert BlockTooOld();
-        }
-        
-        if (computedHash != expectedHash) {
-            revert InvalidBlockHash();
-        }
 
-        // Decode the RLP to extract state root
-        bytes32 stateRoot = _extractStateRootFromRLP(blockHeaderRLP);
-        
-        return BlockHeader({
-            stateRoot: stateRoot,
-            blockNumber: blockNumber,
-            blockHash: computedHash
-        });
-    }
 
     /**
      * @notice Extract state root from RLP-encoded block header using battle-tested RLPReader
