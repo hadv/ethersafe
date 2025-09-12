@@ -133,18 +133,6 @@ contract InheritanceManager {
     // --- External/Public Functions ---
 
     /**
-     * @notice Verify account state using Merkle proof against state root
-     * @param account The account to verify
-     * @param stateRoot The state root to verify against
-     * @param accountStateProof The account state and Merkle proof
-     * @return isValid Whether the proof is valid
-     */
-
-
-
-
-
-    /**
      * @notice Verify block hash is valid and accessible
      * @param blockNumber The block number to verify
      * @param providedBlockHash The block hash provided
@@ -340,11 +328,6 @@ contract InheritanceManager {
         return ECDSA.recover(hash, signature);
     }
 
-    /**
-     * @dev Validate data for claiming inheritance
-     * @param currentBlock The current block number to validate
-     * @param currentBlockHash The current block hash to validate
-     */
     /**
      * @dev Validate inheritance configuration parameters
      * @param account The account to configure inheritance for
